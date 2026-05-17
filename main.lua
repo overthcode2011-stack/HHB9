@@ -478,11 +478,11 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, -110, 0, 26)
 titleLabel.Position = UDim2.new(0, 52, 0, 10)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Happy Hub v8"
+titleLabel.Text = "HAPPY HUB"
 titleLabel.TextColor3 = T().text
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.TextSize = 19
-titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Font = Enum.Font.BuilderSansBold
 titleLabel.Parent = header
 table.insert(reg.texts, titleLabel)
 
@@ -490,7 +490,7 @@ local authorLabel = Instance.new("TextLabel")
 authorLabel.Size = UDim2.new(1, -110, 0, 14)
 authorLabel.Position = UDim2.new(0, 52, 0, 36)
 authorLabel.BackgroundTransparency = 1
-authorLabel.Text = "by OverRBX  ·  Since 2026"
+authorLabel.Text = "v9.0.0 by @OverthaneRBX"
 authorLabel.TextColor3 = T().subtext
 authorLabel.TextXAlignment = Enum.TextXAlignment.Left
 authorLabel.TextSize = 10
