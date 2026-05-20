@@ -1951,11 +1951,164 @@ local function startGeneralAimbot()
 				closestDist = dist
 				closest = hrp
 			end
+--============================================================
+-- PAGE: AIMBOT
+--============================================================
+local aimbotPage = newPage("Aimbot")
+do
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0,10)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = aimbotPage
+	stylePadding(aimbotPage, 0,10,0,4)
+end
+
+makeSectionLabel(aimbotPage, "MURDER MYSTERY 2", 1)
+local pillAimbotMM2, setStateAimbotMM2, getStateAimbotMM2 = makeToggleRow(aimbotPage, "Lock-On Asesino", 2)
+local aimbotSmooth = 8
+makeSliderRow(aimbotPage, "Suavidad (MM2)", 1, 30, aimbotSmooth, function(v) aimbotSmooth = v end, 3)
+local aimbotRange = 500
+makeSliderRow(aimbotPage, "Rango máximo (studs)", 50, 1000, aimbotRange, function(v) aimbotRange = v end, 4)
+
+makeSectionLabel(aimbotPage, "AIMBOT GENERAL", 5)
+local pillAimbotGeneral, setStateAimbotGeneral, getStateAimbotGeneral = makeToggleRow(aimbotPage, "Aimbot General (Mouse Lock)", 6)
+local generalFOV = 500
+makeSliderRow(aimbotPage, "FOV (píxeles)", 50, 1200, generalFOV, function(v) generalFOV = v end, 7)
+local generalSmooth = 4
+makeSliderRow(aimbotPage, "Suavidad (General)", 1, 15, generalSmooth, function(v) generalSmooth = v end, 8)
+
+local aimbotStatusBox = Instance.new("Frame")
+aimbotStatusBox.LayoutOrder = 9
+aimbotStatusBox.Size = UDim2.new(1,0,0,50)
+aimbotStatusBox.BackgroundColor3 = T().bg
+aimbotStatusBox.BackgroundTransparency = 0.22
+aimbotStatusBox.BorderSizePixel = 0
+aimbotStatusBox.Parent = aimbotPage
+styleCorner(aimbotStatusBox, UDim.new(0,10))
+styleStroke(aimbotStatusBox, 0.88)
+table.insert(reg.panels, aimbotStatusBox)
+
+local aimbotStatusDot = Instance.new("Frame")
+aimbotStatusDot.Size = UDim2.new(0,10,0,10)
+aimbotStatusDot.Position = UDim2.new(0,14,0.5,-5)
+aimbotStatusDot.BackgroundColor3 = T().knobOff
+aimbotStatusDot.BorderSizePixel = 0
+aimbotStatusDot.Parent = aimbotStatusBox
+styleCorner(aimbotStatusDot, UDim.new(1,0))
+
+local aimbotStatusLbl = Instance.new("TextLabel")
+aimbotStatusLbl.Size = UDim2.new(1,-34,1,0)
+aimbotStatusLbl.Position = UDim2.new(0,32,0,0)
+aimbotStatusLbl.BackgroundTransparency = 1
+aimbotStatusLbl.Text = "Sin asesino detectado"
+aimbotStatusLbl.TextColor3 = T().subtext
+aimbotStatusLbl.TextXAlignment = Enum.TextXAlignment.Left
+aimbotStatusLbl.Font = Enum.Font.GothamSemibold
+aimbotStatusLbl.TextSize = 13
+aimbotStatusLbl.Parent = aimbotStatusBox
+table.insert(reg.subtexts, aimbotStatusLbl)
+
+makeInfoCard(aimbotPage,
+	"• Lock-On Asesino: solo funciona en MM2.\n• Aimbot General: se ajusta al jugador más cerca del cursor.",
+	10)
+
+--============================================================
+-- AIMBOT LOGIC
+--============================================================
+local mm2Conn, generalConn = nil, nil
+
+local function getMurderer()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr == player then continue end
+		local char = plr.Character
+		local bp   = plr:FindFirstChild("Backpack")
+		if (char and char:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife")) then
+			return plr
+		end
+	end
+	return nil
+end
+
+local function startMM2Aimbot()
+	mm2Conn = RunService.RenderStepped:Connect(function()
+		if not getStateAimbotMM2() then return end
+		local murderer = getMurderer()
+		if not murderer or not murderer.Character then
+			aimbotStatusDot.BackgroundColor3 = T().knobOff
+			aimbotStatusLbl.Text = "Sin asesino detectado"
+			aimbotStatusLbl.TextColor3 = T().subtext
+			return
+		end
+		local murderHRP = murderer.Character:FindFirstChild("HumanoidRootPart")
+		local myHRP     = getHRP()
+		if not murderHRP or not myHRP then return end
+		local dist = (myHRP.Position - murderHRP.Position).Magnitude
+		if dist > aimbotRange then
+			aimbotStatusDot.BackgroundColor3 = Color3.fromRGB(255,180,0)
+			aimbotStatusLbl.Text = murderer.DisplayName.." — fuera de rango"
+			aimbotStatusLbl.TextColor3 = Color3.fromRGB(255,180,0)
+			return
+		end
+		local murderHum = murderer.Character:FindFirstChildOfClass("Humanoid")
+		if not murderHum or murderHum.Health <= 0 then return end
+		local camera = workspace.CurrentCamera
+		local targetPos
+		local lowerTorso = murderer.Character:FindFirstChild("LowerTorso")
+		local torso      = murderer.Character:FindFirstChild("Torso")
+		if lowerTorso then
+			targetPos = lowerTorso.Position
+		elseif torso then
+			targetPos = torso.Position
+		else
+			targetPos = murderHRP.Position + Vector3.new(0, 0.6, 0)
+		end
+		local targetCF = CFrame.new(camera.CFrame.Position, targetPos)
+		local alpha    = math.clamp(1/aimbotSmooth, 0.02, 1)
+		camera.CFrame  = camera.CFrame:Lerp(targetCF, alpha)
+		aimbotStatusDot.BackgroundColor3 = T().accent
+		aimbotStatusLbl.Text = "Locked: "..murderer.DisplayName
+		aimbotStatusLbl.TextColor3 = T().accent
+	end)
+end
+
+local function stopMM2Aimbot()
+	if mm2Conn then mm2Conn:Disconnect(); mm2Conn = nil end
+	if aimbotStatusDot and aimbotStatusDot.Parent then
+		aimbotStatusDot.BackgroundColor3 = T().knobOff
+	end
+	if aimbotStatusLbl and aimbotStatusLbl.Parent then
+		aimbotStatusLbl.Text      = "Sin asesino detectado"
+		aimbotStatusLbl.TextColor3 = T().subtext
+	end
+end
+
+local function startGeneralAimbot()
+	generalConn = RunService.RenderStepped:Connect(function()
+		if not getStateAimbotGeneral() then return end
+		local camera  = workspace.CurrentCamera
+		local myHRP   = getHRP()
+		if not myHRP then return end
+		local mousePos = UserInputService:GetMouseLocation()
+		local closest, closestDist = nil, generalFOV
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr == player then continue end
+			local char = plr.Character
+			if not char then continue end
+			local hrp = char:FindFirstChild("HumanoidRootPart")
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if not hrp or not hum or hum.Health <= 0 then continue end
+			local screenPos, onScreen = camera:WorldToScreenPoint(hrp.Position)
+			if not onScreen then continue end
+			local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+			if dist < closestDist then
+				closestDist = dist
+				closest = hrp
+			end
 		end
 		if closest then
 			local targetCF = CFrame.new(camera.CFrame.Position, closest.Position)
-			local alpha = math.clamp(1/aimbotGeneral.smooth, 0.05, 1)
-			camera.CFrame = camera.CFrame:Lerp(targetCF, alpha)
+			local alpha    = math.clamp(1/generalSmooth, 0.05, 1)
+			camera.CFrame  = camera.CFrame:Lerp(targetCF, alpha)
 		end
 	end)
 end
@@ -1964,31 +2117,14 @@ local function stopGeneralAimbot()
 	if generalConn then generalConn:Disconnect(); generalConn = nil end
 end
 
--- Conectar eventos de aimbot (los botones se crearon dentro del bloque, pero accedemos via tablas)
--- Como los botones están en el bloque y no podemos acceder directamente, usamos las funciones get/set.
--- Pero necesitamos ejecutar start/stop cuando cambien los toggles. Lo haremos mediante un bucle o conectando directamente a las variables.
--- En lugar de complicar, definimos un Changed en las funciones set (pero no tenemos señal). Mejor: en el mismo bloque después de crear los pills, conectamos.
--- Dado que ya salimos del bloque, no podemos. Así que moveré las conexiones dentro del bloque aimbotPage.
--- Para no reescribir todo, simplemente añado un pequeño fragmento que modifica las funciones set para que automaticamente activen/desactiven.
--- Esto es más elegante y evita depender de eventos externos.
-
--- Reemplazamos las funciones set de aimbot con wrappers que actúan automáticamente.
-do
-	local originalSetMM2 = aimbotMM2.set
-	aimbotMM2.set = function(v)
-		originalSetMM2(v)
-		if v then startMM2Aimbot() else stopMM2Aimbot() end
-	end
-	local originalSetGen = aimbotGeneral.set
-	aimbotGeneral.set = function(v)
-		originalSetGen(v)
-		if v then startGeneralAimbot() else stopGeneralAimbot() end
-	end
-	-- Asegurar que los valores iniciales están bien
-	if aimbotMM2.get() then startMM2Aimbot() else stopMM2Aimbot() end
-	if aimbotGeneral.get() then startGeneralAimbot() else stopGeneralAimbot() end
-end
-
+pillAimbotMM2.MouseButton1Click:Connect(function()
+	local v = not getStateAimbotMM2(); setStateAimbotMM2(v)
+	if v then startMM2Aimbot() else stopMM2Aimbot() end
+end)
+pillAimbotGeneral.MouseButton1Click:Connect(function()
+	local v = not getStateAimbotGeneral(); setStateAimbotGeneral(v)
+	if v then startGeneralAimbot() else stopGeneralAimbot() end
+end)
 --============================================================
 -- PAGINA: AVATAR (omitido por brevedad, se copia igual que antes)
 --============================================================
