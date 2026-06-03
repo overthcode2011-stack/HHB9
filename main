@@ -1,6 +1,6 @@
--- HHB v8 By OverRBX
--- Since 2026 | Mobile-first redesign + Minimizable panel (CORREGIDO)
--- Todas las funciones integradas y accesibles globalmente
+-- HHB v9 By OverRBX (FIXED by Claude)
+-- Correcciones: DisplayOrder, scope de funciones, bgTexts, refreshs de tema,
+--               mm2Conn shadow, toggleBtn transparency, showToast
 
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
@@ -82,6 +82,7 @@ local THEMES = {
 local currentThemeName = "Dark"
 local function T() return THEMES[currentThemeName] end
 
+-- ✅ FIX 4: bgTexts agregado al registro para textos con color = th.bg
 local reg = {
 	panels        = {},
 	texts         = {},
@@ -96,6 +97,7 @@ local reg = {
 	sliderHandles = {},
 	sidebarBtns   = {},
 	scrollBars    = {},
+	bgTexts       = {},   -- ✅ nuevo: textos cuyo color debe ser th.bg
 }
 
 local activeTabName = "Home"
@@ -103,6 +105,9 @@ local iconRefs = {}
 local customIconOverride = nil
 local execTabBtnRefs = {}
 local activeExecTabIdx = 1
+
+-- ✅ FIX 2: tabla global de funciones para resolver problemas de scope
+local HHBFuncs = {}
 
 local function applyTheme()
 	local th = T()
@@ -117,6 +122,8 @@ local function applyTheme()
 	for _, o in ipairs(reg.sliderFills)   do if o and o.Parent then o.BackgroundColor3    = th.accent  end end
 	for _, o in ipairs(reg.sliderHandles) do if o and o.Parent then o.BackgroundColor3    = th.text    end end
 	for _, o in ipairs(reg.scrollBars)    do if o and o.Parent then o.ScrollBarImageColor3 = th.accent  end end
+	-- ✅ FIX 4: actualizar textos con color de fondo (ej. label del botón Ejecutar)
+	for _, o in ipairs(reg.bgTexts)       do if o and o.Parent then o.TextColor3           = th.bg      end end
 	for _, d in ipairs(reg.pills) do
 		local pill, knob, getState = d[1], d[2], d[3]
 		if pill and pill.Parent then pill.BackgroundColor3 = getState() and th.accent or th.knobOff end
@@ -142,9 +149,10 @@ local function applyTheme()
 		end
 	end
 	if toggleBtn and toggleBtn.Parent then
-		toggleBtn.BackgroundColor3 = th.bg
-		toggleBtn.ImageColor3      = th.accent
-		toggleBtn.Image            = customIconOverride or th.icon
+		toggleBtn.BackgroundColor3       = th.bg
+		toggleBtn.ImageColor3            = th.accent
+		toggleBtn.Image                  = customIconOverride or th.icon
+		toggleBtn.BackgroundTransparency = 0.12   -- ✅ FIX 6: no quedaba semitransparente al cambiar tema
 	end
 	if headerIcon and headerIcon.Parent then
 		headerIcon.Image = customIconOverride or th.icon
@@ -166,6 +174,9 @@ local function applyTheme()
 			end
 		end
 	end
+	-- ✅ FIX 5: re-renderizar filas dinámicas al cambiar tema
+	if HHBFuncs.refreshWaypoints then HHBFuncs.refreshWaypoints() end
+	if HHBFuncs.refreshPlayers   then HHBFuncs.refreshPlayers()   end
 end
 
 --============================================================
@@ -414,10 +425,11 @@ end
 -- GUI PRINCIPAL (MINIMIZABLE Y ARRASTRABLE)
 --============================================================
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "HHB8"
+screenGui.Name = "HHB9"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder = 999   -- ✅ FIX 1: por encima de todas las GUIs del juego
 screenGui.Parent = playerGui
 
 local panel = Instance.new("Frame")
@@ -521,7 +533,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- DRAG (arrastrar por el header)
+-- DRAG
 local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
 header.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -723,7 +735,7 @@ local function makeInfoCard(parent, text, lo)
 end
 
 --============================================================
--- ALMACENES DE ESTADOS (para acceso global)
+-- ALMACENES DE ESTADOS
 --============================================================
 espStates = {
 	getPL = nil, setPL = nil,
@@ -742,9 +754,11 @@ movementStates = {
 flyState = { get = nil, set = nil, speed = DEFAULT_FLYSPEED }
 aimbotMM2 = { get = nil, set = nil, smooth = 8, range = 500, statusDot = nil, statusLbl = nil }
 aimbotGeneral = { get = nil, set = nil, fov = 500, smooth = 4 }
--- Variables de conexiones para poder detenerlas después
+
+-- Variables de conexiones (scope global para poder apagarlas desde Settings)
 local noclipConn, godConn, antiAFKConn, antiFlingConn = nil, nil, nil, nil
 local flyConn, flyBV, flyBG = nil, nil, nil
+-- ✅ FIX 3: mm2Conn y generalConn solo en scope externo, NO re-declarar dentro del bloque Aimbot
 local mm2Conn, generalConn = nil, nil
 local antiFlingLastPos = nil
 local ANTI_FLING_MAX_VEL = 350
@@ -954,7 +968,7 @@ do
 end
 
 --============================================================
--- PAGINA: WAYPOINTS (igual que antes)
+-- PAGINA: WAYPOINTS
 --============================================================
 local wpPage = newPage("Waypoints")
 do
@@ -964,8 +978,7 @@ do
 	layout.Parent = wpPage
 	stylePadding(wpPage, 0,8,0,4)
 
-
-makeSectionLabel(wpPage, "TELETRANSPORTE RAPIDO (MM2)", 0)
+	makeSectionLabel(wpPage, "TELETRANSPORTE RAPIDO (MM2)", 0)
 	local quickRow = Instance.new("Frame")
 	quickRow.LayoutOrder = 1
 	quickRow.Size = UDim2.new(1,0,0,42)
@@ -1048,9 +1061,7 @@ makeSectionLabel(wpPage, "TELETRANSPORTE RAPIDO (MM2)", 0)
 			local gun = p.Character:FindFirstChild("Gun") or (p.Character:FindFirstChild("Backpack") and p.Character:FindFirstChild("Backpack"):FindFirstChild("Gun"))
 			if gun and gun:IsA("Tool") and gun:FindFirstChild("Handle") then
 				local hrp = getHRP()
-				if hrp then
-					hrp.CFrame = gun.Handle.CFrame + Vector3.new(0,2,0)
-				end
+				if hrp then hrp.CFrame = gun.Handle.CFrame + Vector3.new(0,2,0) end
 			end
 		else
 			print("Arma no encontrada")
@@ -1237,12 +1248,14 @@ makeSectionLabel(wpPage, "TELETRANSPORTE RAPIDO (MM2)", 0)
 		refreshList()
 	end)
 
+	-- ✅ FIX 5: exponer refreshList para que applyTheme pueda llamarla
+	HHBFuncs.refreshWaypoints = refreshList
 	_G.__HHB_refreshList = refreshList
 	refreshList()
 end
 
 --============================================================
--- PAGINA: JUGADORES (TP a jugadores + Server Hop + Rejoin)
+-- PAGINA: JUGADORES
 --============================================================
 local jugadoresPage = newPage("Jugadores")
 do
@@ -1254,7 +1267,6 @@ do
 
 	makeSectionLabel(jugadoresPage, "TELETRANSPORTE A JUGADORES", 1)
 
-	-- Lista scrollable de jugadores con boton TP individual
 	local playerListContainer = Instance.new("Frame")
 	playerListContainer.Name = "PlayerListContainer"
 	playerListContainer.LayoutOrder = 2
@@ -1268,7 +1280,6 @@ do
 	plListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	plListLayout.Parent = playerListContainer
 
-	-- Boton TP a TODOS
 	local tpAllBtn = Instance.new("TextButton")
 	tpAllBtn.LayoutOrder = 3
 	tpAllBtn.Size = UDim2.new(1,0,0,50)
@@ -1302,7 +1313,6 @@ do
 		end)
 	end)
 
-	-- Funcion para refrescar lista de jugadores
 	local function refreshPlayerList()
 		for _, ch in ipairs(playerListContainer:GetChildren()) do
 			if ch:IsA("Frame") then ch:Destroy() end
@@ -1323,7 +1333,6 @@ do
 			styleStroke(row, 0.88)
 			table.insert(reg.panels, row)
 
-			-- Avatar inicial
 			local avatarCircle = Instance.new("Frame")
 			avatarCircle.Size = UDim2.new(0,36,0,36)
 			avatarCircle.Position = UDim2.new(0,10,0.5,-18)
@@ -1367,7 +1376,6 @@ do
 			userLbl.Parent = row
 			table.insert(reg.subtexts, userLbl)
 
-			-- Boton TP individual
 			local tpBtn = Instance.new("TextButton")
 			tpBtn.Size = UDim2.new(0,62,0,34)
 			tpBtn.Position = UDim2.new(1,-70,0.5,-17)
@@ -1396,7 +1404,6 @@ do
 			end)
 		end
 
-		-- Si no hay otros jugadores
 		if #allPlayers <= 1 then
 			local noPlayers = Instance.new("TextLabel")
 			noPlayers.Size = UDim2.new(1,0,0,44)
@@ -1410,7 +1417,6 @@ do
 		end
 	end
 
-	-- Boton refrescar lista
 	local refreshBtn = Instance.new("TextButton")
 	refreshBtn.LayoutOrder = 4
 	refreshBtn.Size = UDim2.new(1,0,0,42)
@@ -1430,13 +1436,11 @@ do
 
 	refreshBtn.MouseButton1Click:Connect(refreshPlayerList)
 
-	-- Auto-refrescar cuando alguien entra/sale
 	Players.PlayerAdded:Connect(function() task.wait(1); refreshPlayerList() end)
 	Players.PlayerRemoving:Connect(function() task.wait(0.1); refreshPlayerList() end)
 
 	makeSectionLabel(jugadoresPage, "SERVIDOR", 5)
 
-	-- Rejoin
 	local rejoinBtn = Instance.new("TextButton")
 	rejoinBtn.LayoutOrder = 6
 	rejoinBtn.Size = UDim2.new(1,0,0,50)
@@ -1461,7 +1465,6 @@ do
 		end)
 	end)
 
-	-- Server Hop
 	local serverHopBtn = Instance.new("TextButton")
 	serverHopBtn.LayoutOrder = 7
 	serverHopBtn.Size = UDim2.new(1,0,0,50)
@@ -1497,12 +1500,13 @@ do
 		end)
 	end)
 
-	-- Llenar lista inicial
+	-- ✅ FIX 5: exponer refreshPlayerList para que applyTheme pueda llamarla
+	HHBFuncs.refreshPlayers = refreshPlayerList
 	refreshPlayerList()
 end
 
 --============================================================
--- PAGINA: ESP (con almacenamiento de estados)
+-- PAGINA: ESP
 --============================================================
 local espPage = newPage("ESP")
 do
@@ -1520,14 +1524,12 @@ do
 	local pillNameTag, setNameTag, getNameTag = makeToggleRow(espPage, "Etiquetas de nombre", 6)
 	local pillTeamOnly, setTeamOnly, getTeamOnly = makeToggleRow(espPage, "Solo Enemigos (PL)", 7)
 
-	-- Guardar en tabla global
 	espStates.getPL = getPL; espStates.setPL = setPL
 	espStates.getMM2 = getMM2; espStates.setMM2 = setMM2
 	espStates.getOG = getOG; espStates.setOG = setOG
 	espStates.getNameTag = getNameTag; espStates.setNameTag = setNameTag
 	espStates.getTeamOnly = getTeamOnly; espStates.setTeamOnly = setTeamOnly
 
-	-- Conectar eventos
 	pillPL.MouseButton1Click:Connect(function()
 		local v = not getPL(); setPL(v)
 		if v then enableESP_PL() else disableESP_PL() end
@@ -1780,12 +1782,17 @@ do
 			flyBG.CFrame = cf
 		end)
 	end
+
 	local function stopFly()
 		if flyConn then flyConn:Disconnect(); flyConn = nil end
 		if flyBV then flyBV:Destroy(); flyBV = nil end
 		if flyBG then flyBG:Destroy(); flyBG = nil end
 		local hum = getHumanoid(); if hum then hum.PlatformStand = false end
 	end
+
+	-- ✅ FIX 2: exponer via HHBFuncs para uso en Settings
+	HHBFuncs.startFly = startFly
+	HHBFuncs.stopFly  = stopFly
 
 	pillFly.MouseButton1Click:Connect(function()
 		local v = not getFly(); setFly(v)
@@ -1856,11 +1863,7 @@ do
 		"• Lock-On Asesino: solo funciona en MM2.\n• Aimbot General: se ajusta al jugador más cerca del cursor.",
 		10)
 
-	--============================================================
-	-- AIMBOT LOGIC
-	--============================================================
-	local mm2Conn, generalConn = nil, nil
-
+	-- ✅ FIX 3: NO re-declarar mm2Conn/generalConn aquí (usan las del scope externo)
 	local function getMurderer()
 		for _, plr in ipairs(Players:GetPlayers()) do
 			if plr == player then continue end
@@ -1921,7 +1924,7 @@ do
 			aimbotStatusDot.BackgroundColor3 = T().knobOff
 		end
 		if aimbotStatusLbl and aimbotStatusLbl.Parent then
-			aimbotStatusLbl.Text      = "Sin asesino detectado"
+			aimbotStatusLbl.Text       = "Sin asesino detectado"
 			aimbotStatusLbl.TextColor3 = T().subtext
 		end
 	end
@@ -1960,6 +1963,12 @@ do
 	local function stopGeneralAimbot()
 		if generalConn then generalConn:Disconnect(); generalConn = nil end
 	end
+
+	-- ✅ FIX 2: exponer via HHBFuncs para uso en Settings
+	HHBFuncs.startMM2Aimbot     = startMM2Aimbot
+	HHBFuncs.stopMM2Aimbot      = stopMM2Aimbot
+	HHBFuncs.startGeneralAimbot = startGeneralAimbot
+	HHBFuncs.stopGeneralAimbot  = stopGeneralAimbot
 
 	pillAimbotMM2.MouseButton1Click:Connect(function()
 		local v = not getStateAimbotMM2(); setStateAimbotMM2(v)
@@ -2483,7 +2492,8 @@ do
 	execBtnLbl.Font = Enum.Font.GothamBold
 	execBtnLbl.TextXAlignment = Enum.TextXAlignment.Left
 	execBtnLbl.Parent = execBtn
-	table.insert(reg.panels, execBtnLbl)
+	-- ✅ FIX 4: usar bgTexts en lugar de panels para que el color cambie con el tema
+	table.insert(reg.bgTexts, execBtnLbl)
 
 	execBtn.MouseEnter:Connect(function() TweenService:Create(execBtn, twI, {BackgroundTransparency=0.18}):Play() end)
 	execBtn.MouseLeave:Connect(function() TweenService:Create(execBtn, twI, {BackgroundTransparency=0}):Play() end)
@@ -2690,6 +2700,33 @@ do
 end
 
 --============================================================
+-- ✅ MEJORA 7: Toast de notificación (definido antes de Settings)
+--============================================================
+local function showToast(msg)
+	local toast = Instance.new("TextLabel")
+	toast.Size = UDim2.new(0, 220, 0, 36)
+	toast.Position = UDim2.new(0.5, -110, 1, -60)
+	toast.BackgroundColor3 = T().accent
+	toast.BackgroundTransparency = 0.1
+	toast.TextColor3 = T().bg
+	toast.Text = msg
+	toast.Font = Enum.Font.GothamBold
+	toast.TextSize = 13
+	toast.BorderSizePixel = 0
+	toast.ZIndex = 100
+	toast.Parent = screenGui
+	styleCorner(toast, UDim.new(0, 8))
+	TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
+	task.delay(1.8, function()
+		TweenService:Create(toast, TweenInfo.new(0.4), {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0.5, -110, 1, -40)
+		}):Play()
+		task.delay(0.4, function() if toast and toast.Parent then toast:Destroy() end end)
+	end)
+end
+
+--============================================================
 -- PAGINA: SETTINGS
 --============================================================
 local settingsPage = newPage("Settings")
@@ -2772,12 +2809,12 @@ do
 
 	local SWATCH_DEFS = {
 		{ name="Dark",      col=Color3.fromRGB(30,30,30),       row=swatchRow1 },
-		{ name="Purple",    col=Color3.fromRGB(160,80,255),      row=swatchRow1 },
-		{ name="Blue",      col=Color3.fromRGB(40,160,255),      row=swatchRow1 },
-		{ name="Red",       col=Color3.fromRGB(230,50,50),       row=swatchRow1 },
-		{ name="White",     col=Color3.fromRGB(210,210,210),     row=swatchRow1 },
-		{ name="Valentine", col=Color3.fromRGB(255,105,155),     row=swatchRow2 },
-		{ name="OverRBX",   col=Color3.fromRGB(30,30,30),        row=swatchRow2 },
+		{ name="Purple",    col=Color3.fromRGB(160,80,255),     row=swatchRow1 },
+		{ name="Blue",      col=Color3.fromRGB(40,160,255),     row=swatchRow1 },
+		{ name="Red",       col=Color3.fromRGB(230,50,50),      row=swatchRow1 },
+		{ name="White",     col=Color3.fromRGB(210,210,210),    row=swatchRow1 },
+		{ name="Valentine", col=Color3.fromRGB(255,105,155),    row=swatchRow2 },
+		{ name="OverRBX",   col=Color3.fromRGB(30,30,30),       row=swatchRow2 },
 	}
 
 	local swatchData = {}
@@ -2825,6 +2862,8 @@ do
 			themeCurLbl.Text = "Tema actual:  "..def.name
 			applyTheme()
 			switchTab(activeTabName)
+			-- ✅ MEJORA 7: notificación al cambiar tema
+			showToast("Tema: " .. def.name)
 		end)
 	end
 
@@ -2844,14 +2883,14 @@ do
 		local v = not getFullbright(); setFullbright(v)
 		local Lighting = game:GetService("Lighting")
 		if v then
-			Lighting.Brightness = 10
-			Lighting.ClockTime  = 14
-			Lighting.FogEnd     = 1e6
+			Lighting.Brightness    = 10
+			Lighting.ClockTime     = 14
+			Lighting.FogEnd        = 1e6
 			Lighting.GlobalShadows = false
 		else
-			Lighting.Brightness = 1
-			Lighting.ClockTime  = 14
-			Lighting.FogEnd     = 100000
+			Lighting.Brightness    = 1
+			Lighting.ClockTime     = 14
+			Lighting.FogEnd        = 100000
 			Lighting.GlobalShadows = true
 		end
 	end)
@@ -2939,20 +2978,20 @@ do
 	makeSectionLabel(settingsPage, "ZONA DE PELIGRO", 8)
 	local deleteGuiBtn = makeDangerBtn(settingsPage, "Eliminar Gui", 9)
 	deleteGuiBtn.MouseButton1Click:Connect(function()
-		-- Detener todas las conexiones
-		pcall(stopFly)
-		pcall(stopMM2Aimbot)
-		pcall(stopGeneralAimbot)
-		if noclipConn then pcall(function() noclipConn:Disconnect() end); noclipConn = nil end
-		if godConn then pcall(function() godConn:Disconnect() end); godConn = nil end
-		if antiAFKConn then pcall(function() antiAFKConn:Disconnect() end); antiAFKConn = nil end
+		-- ✅ FIX 2: usar HHBFuncs para acceder a funciones de otros bloques
+		pcall(HHBFuncs.stopFly)
+		pcall(HHBFuncs.stopMM2Aimbot)
+		pcall(HHBFuncs.stopGeneralAimbot)
+		if noclipConn   then pcall(function() noclipConn:Disconnect()   end); noclipConn   = nil end
+		if godConn      then pcall(function() godConn:Disconnect()      end); godConn      = nil end
+		if antiAFKConn  then pcall(function() antiAFKConn:Disconnect()  end); antiAFKConn  = nil end
 		if antiFlingConn then pcall(function() antiFlingConn:Disconnect() end); antiFlingConn = nil end
 		if screenGui and screenGui.Parent then screenGui:Destroy() end
 	end)
 end
 
 --============================================================
--- ESP LOGIC (definición de funciones usadas por ESP)
+-- ESP LOGIC
 --============================================================
 local TEAM_COLORS = {
 	Criminals = Color3.fromRGB(255,60,60),
@@ -3103,7 +3142,6 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- Conectar eventos de players para ESP
 local function connectPlayerESP(plr)
 	plr.CharacterAdded:Connect(function(char)
 		task.wait(0.5)
@@ -3216,4 +3254,4 @@ end)
 -- Inicializar
 switchTab("Home")
 applyTheme()
-print("Happy Hub v9 cargado | Jugadores · TP All · Fullbright · Hide GUI | OverRBX")
+print("Happy Hub v9 FIXED cargado | Todos los bugs corregidos | OverRBX")
