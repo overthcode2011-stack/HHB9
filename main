@@ -1,7 +1,4 @@
--- HHB v9 By OverRBX (FIXED by Claude)
--- Correcciones: DisplayOrder, scope de funciones, bgTexts, refreshs de tema,
---               mm2Conn shadow, toggleBtn transparency, showToast
-
+--|| Happy Hub ~ v10 ~ By Odecode ||--
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -24,7 +21,7 @@ local THEMES = {
 		icon      = "rbxassetid://104348663064077",
 	},
 	Purple = {
-		accent    = Color3.fromRGB(160, 80, 255),
+		accent    = Color3.fromRGB(160, 80, 255), 
 		bg        = Color3.fromRGB(12, 8, 20),
 		text      = Color3.fromRGB(240, 228, 255),
 		subtext   = Color3.fromRGB(160, 140, 200),
@@ -97,7 +94,7 @@ local reg = {
 	sliderHandles = {},
 	sidebarBtns   = {},
 	scrollBars    = {},
-	bgTexts       = {},   -- ✅ nuevo: textos cuyo color debe ser th.bg
+	bgTexts       = {}, 
 }
 
 local activeTabName = "Home"
@@ -122,7 +119,6 @@ local function applyTheme()
 	for _, o in ipairs(reg.sliderFills)   do if o and o.Parent then o.BackgroundColor3    = th.accent  end end
 	for _, o in ipairs(reg.sliderHandles) do if o and o.Parent then o.BackgroundColor3    = th.text    end end
 	for _, o in ipairs(reg.scrollBars)    do if o and o.Parent then o.ScrollBarImageColor3 = th.accent  end end
-	-- ✅ FIX 4: actualizar textos con color de fondo (ej. label del botón Ejecutar)
 	for _, o in ipairs(reg.bgTexts)       do if o and o.Parent then o.TextColor3           = th.bg      end end
 	for _, d in ipairs(reg.pills) do
 		local pill, knob, getState = d[1], d[2], d[3]
@@ -144,15 +140,16 @@ local function applyTheme()
 		end
 	end
 	for _, il in ipairs(iconRefs) do
-		if il and il.Parent and (il:IsA("ImageLabel") or il:IsA("ImageButton")) then
-			il.ImageColor3 = th.accent
+		if il and il.Parent then
+			if il:IsA("ImageLabel") or il:IsA("ImageButton") then
+				il.ImageColor3 = th.accent
+			end
 		end
 	end
 	if toggleBtn and toggleBtn.Parent then
-		toggleBtn.BackgroundColor3       = th.bg
-		toggleBtn.ImageColor3            = th.accent
-		toggleBtn.Image                  = customIconOverride or th.icon
-		toggleBtn.BackgroundTransparency = 0.12   -- ✅ FIX 6: no quedaba semitransparente al cambiar tema
+		toggleBtn.BackgroundColor3 = th.bg
+		toggleBtn.ImageColor3      = th.accent
+		toggleBtn.Image            = customIconOverride or th.icon
 	end
 	if headerIcon and headerIcon.Parent then
 		headerIcon.Image = customIconOverride or th.icon
@@ -174,7 +171,6 @@ local function applyTheme()
 			end
 		end
 	end
-	-- ✅ FIX 5: re-renderizar filas dinámicas al cambiar tema
 	if HHBFuncs.refreshWaypoints then HHBFuncs.refreshWaypoints() end
 	if HHBFuncs.refreshPlayers   then HHBFuncs.refreshPlayers()   end
 end
@@ -182,21 +178,27 @@ end
 --============================================================
 -- CONFIGURACION GLOBAL
 --============================================================
-local PANEL_TRANSPARENCY = 0.12
+local PANEL_TRANSPARENCY = 0.6
 local ICON_ID            = "rbxassetid://104348663064077"
 local CLOSE_ICON_ID      = "rbxassetid://115558082558028"
 local ADD_WP_ICON_ID     = "rbxassetid://117786081881229"
 local TP_ICON            = "rbxassetid://2129457776"
 local DEL_ICON           = "rbxassetid://120824454689592"
-local CLEAR_ICON_ID      = "rbxassetid://123405614186321"
-local EXEC_ICON_ID       = "rbxassetid://8215093320"
+local CLEAR_ICON_ID      = "rbxassetid://80646119892661"
+local EXEC_ICON_ID       = "rbxassetid://116651535114885"
 local VERIFIED_ICON_ID   = "rbxassetid://13737813988"
+local FLING_ICON = "rbxassetid://108692862281038" 
 
 local DEFAULT_WALKSPEED  = 16
 local DEFAULT_JUMPPOWER  = 50
 local DEFAULT_FLYSPEED   = 40
 
 local waypoints = {}
+local Maps_mm2 = {
+    "ResearchFacility", "House2", "Mansion2", "Hotel",
+    "MilBase", "Bank2", "BioLab", "Factory",
+    "Workplace", "PoliceStation", "Office3","Hospital3"
+}
 
 --============================================================
 -- HELPERS
@@ -218,6 +220,73 @@ local function uniqueName(base)
 	local i = 2
 	while nameExists(base.." ("..i..")") do i += 1 end
 	return base.." ("..i..")"
+end
+
+-- ✅ FUNCIONES GLOBALES PARA MM2 (definidas UNA SOLA VEZ)
+local function findGunDropCFrame()
+    for _, map in ipairs(workspace:GetChildren()) do
+        if map:IsA("Model") and map.Name:find("Map") then
+            local gunDrop = map:FindFirstChild("GunDrop", true)
+            if gunDrop and gunDrop:IsA("BasePart") then
+                return gunDrop.CFrame
+            end
+        end
+    end
+    return workspace:FindFirstChild("GunDrop") and workspace.GunDrop.CFrame or nil
+end
+
+local function getPlayerWithItem(itemName)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local char = plr.Character
+            local bp = plr:FindFirstChild("Backpack")
+            if (char and char:FindFirstChild(itemName)) or (bp and bp:FindFirstChild(itemName)) then
+                return plr
+            end
+        end
+    end
+    return nil
+end
+
+local function teleportTo(targetPlr)
+    if not targetPlr then return false end
+    local targetChar = targetPlr.Character
+    if not targetChar then return false end
+    local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+    local myHRP = getHRP()
+    if targetHRP and myHRP then
+        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+        return true
+    end
+    return false
+end
+
+local function obtainSheriffGun()
+    local char = player.Character
+    if not char then 
+        warn("Personaje no encontrado")
+        return false 
+    end
+    local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then 
+        warn("HumanoidRootPart no encontrado")
+        return false 
+    end
+    local gunCFrame = findGunDropCFrame()
+    if not gunCFrame then
+        warn("No se encontró GunDrop en el mapa")
+        return false
+    end
+    local originalCF = humanoidRootPart.CFrame
+    humanoidRootPart.CFrame = gunCFrame + Vector3.new(0, 5, 0)
+    task.wait(0.5)
+    humanoidRootPart.CFrame = originalCF
+    local bp = player:FindFirstChild("Backpack")
+    if bp and bp:FindFirstChild("Gun") then
+        print("Arma obtenida exitosamente!")
+        return true
+    end
+    return false
 end
 
 --============================================================
@@ -425,7 +494,7 @@ end
 -- GUI PRINCIPAL (MINIMIZABLE Y ARRASTRABLE)
 --============================================================
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "HHB9"
+screenGui.Name = "HappyHub"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -437,7 +506,7 @@ panel.Name = "MainPanel"
 panel.Size = UDim2.new(0.6, 0, 0.9, 0)
 panel.Position = UDim2.new(0.5, 0, 0.5, 0)
 panel.BackgroundColor3 = T().bg
-panel.BackgroundTransparency = 0.08
+panel.BackgroundTransparency = 0.6
 panel.BorderSizePixel = 0
 panel.AnchorPoint = Vector2.new(0.5, 0.5)
 panel.ClipsDescendants = true
@@ -451,7 +520,7 @@ local shadow = Instance.new("Frame")
 shadow.Size = UDim2.new(1, 28, 1, 28)
 shadow.Position = UDim2.new(0, -14, 0, 14)
 shadow.BackgroundColor3 = Color3.new(0,0,0)
-shadow.BackgroundTransparency = 0.45
+shadow.BackgroundTransparency = 0.5
 shadow.BorderSizePixel = 0
 shadow.ZIndex = panel.ZIndex - 1
 shadow.Parent = panel
@@ -461,7 +530,7 @@ styleCorner(shadow, UDim.new(0, 22))
 local header = Instance.new("Frame")
 header.Size = UDim2.new(1, 0, 0, 58)
 header.BackgroundColor3 = T().bg
-header.BackgroundTransparency = 0.08
+header.BackgroundTransparency = 0.2
 header.BorderSizePixel = 0
 header.Parent = panel
 styleCorner(header, UDim.new(0, 16))
@@ -490,7 +559,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, -110, 0, 26)
 titleLabel.Position = UDim2.new(0, 52, 0, 10)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "HAPPY HUB"
+titleLabel.Text = "Happy Hub"
 titleLabel.TextColor3 = T().text
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.TextSize = 19
@@ -502,7 +571,7 @@ local authorLabel = Instance.new("TextLabel")
 authorLabel.Size = UDim2.new(1, -110, 0, 14)
 authorLabel.Position = UDim2.new(0, 52, 0, 36)
 authorLabel.BackgroundTransparency = 1
-authorLabel.Text = "v9.0.0 by @OverthaneRBX"
+authorLabel.Text = "By Replicated Man • Github"
 authorLabel.TextColor3 = T().subtext
 authorLabel.TextXAlignment = Enum.TextXAlignment.Left
 authorLabel.TextSize = 10
@@ -563,7 +632,7 @@ local sidebar = Instance.new("ScrollingFrame")
 sidebar.Size = UDim2.new(0, 138, 1, -68)
 sidebar.Position = UDim2.new(0, 8, 0, 62)
 sidebar.BackgroundColor3 = T().bg
-sidebar.BackgroundTransparency = 0.38
+sidebar.BackgroundTransparency = 0.45
 sidebar.BorderSizePixel = 0
 sidebar.ScrollBarThickness = 2
 sidebar.ScrollBarImageColor3 = T().accent
@@ -582,7 +651,7 @@ sidebarLayout.Padding = UDim.new(0,6)
 sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
 sidebarLayout.Parent = sidebar
 
-local tabDefs = {"Home","Waypoints","Jugadores","ESP","Movimiento","Fly","Aimbot","Avatar","Executor","GameScripts","Settings"}
+local tabDefs = {"Home","Waypoints","Jugadores","ESP","Movimiento","Aimbot","Avatar","Executor","Scripts","Settings",}
 local tabBtns = {}
 for i, name in ipairs(tabDefs) do
 	local btn = Instance.new("TextButton")
@@ -592,7 +661,7 @@ for i, name in ipairs(tabDefs) do
 	btn.BackgroundTransparency = 0.35
 	btn.Text = name
 	btn.TextColor3 = T().text
-	btn.TextSize = 12
+	btn.TextSize = 12  
 	btn.Font = Enum.Font.GothamSemibold
 	btn.BorderSizePixel = 0
 	btn.AutoButtonColor = false
@@ -765,7 +834,7 @@ local ANTI_FLING_MAX_VEL = 350
 local ANTI_FLING_MAX_DELTA = 80
 
 --============================================================
--- PAGINA: HOME
+-- PAGINA: HOME (VERSIÓN LIMPIA SIN EMOJIS)
 --============================================================
 local homePage = newPage("Home")
 do
@@ -775,6 +844,7 @@ do
 	layout.Parent = homePage
 	stylePadding(homePage, 4,8,0,4)
 
+	-- ===== HEADER CARD =====
 	local headerCard = Instance.new("Frame")
 	headerCard.LayoutOrder = 1
 	headerCard.Size = UDim2.new(1,0,0,80)
@@ -799,7 +869,7 @@ do
 	hubNameLbl.Size = UDim2.new(1,-24,0,28)
 	hubNameLbl.Position = UDim2.new(0,16,0,14)
 	hubNameLbl.BackgroundTransparency = 1
-	hubNameLbl.Text = "Happy Hub v9"
+	hubNameLbl.Text = "Happy Hub"
 	hubNameLbl.TextColor3 = T().text
 	hubNameLbl.Font = Enum.Font.GothamBold
 	hubNameLbl.TextSize = 18
@@ -811,7 +881,7 @@ do
 	hubSubLbl.Size = UDim2.new(1,-24,0,16)
 	hubSubLbl.Position = UDim2.new(0,16,0,44)
 	hubSubLbl.BackgroundTransparency = 1
-	hubSubLbl.Text = "Mobile-first · Since 2026 · v9 Update"
+	hubSubLbl.Text = "Best free hub · Since 2026 · v10 Update"
 	hubSubLbl.TextColor3 = T().subtext
 	hubSubLbl.Font = Enum.Font.Gotham
 	hubSubLbl.TextSize = 11
@@ -819,7 +889,66 @@ do
 	hubSubLbl.Parent = headerCard
 	table.insert(reg.subtexts, hubSubLbl)
 
-	makeSectionLabel(homePage, "OWNERS VERIFICADOS", 2)
+	-- ===== SECCION: MUSICA =====
+	makeSectionLabel(homePage, "Music", 2)
+
+	local pillMusic, setMusic, getMusic = makeToggleRow(homePage, "EYUHH! - HR", 3)
+
+	local musicSound = nil
+	local musicActive = false
+
+	local function playMusic()
+		if musicSound then
+			musicSound:Destroy()
+			musicSound = nil
+		end
+		musicSound = Instance.new("Sound")
+		musicSound.SoundId = "rbxassetid://16190782181"
+		musicSound.Volume = 0.5
+		musicSound.Looped = true
+		musicSound.Parent = playerGui
+		musicSound:Play()
+		musicActive = true
+	end
+
+	local function stopMusic()
+		if musicSound then
+			musicSound:Stop()
+			musicSound:Destroy()
+			musicSound = nil
+		end
+		musicActive = false
+	end
+
+	pillMusic.MouseButton1Click:Connect(function()
+		local v = not getMusic()
+		setMusic(v)
+		if v then
+			playMusic()
+			showToast("Playing: EYUHH! - HR")
+		else
+			stopMusic()
+			showToast("Music stopped")
+		end
+	end)
+
+	screenGui.AncestryChanged:Connect(function()
+		if not screenGui:IsDescendantOf(game) then
+			stopMusic()
+		end
+	end)
+
+	player.CharacterAdded:Connect(function()
+		if getMusic() and musicSound then
+			if not musicSound.Parent then
+				musicSound.Parent = playerGui
+				musicSound:Play()
+			end
+		end
+	end)
+
+	-- ===== SECCION: CREADORES =====
+	makeSectionLabel(homePage, "Creators", 4)
 
 	local function makeOwnerCard(parent, username, role, lo)
 		local th = T()
@@ -899,7 +1028,7 @@ do
 		badge.AnchorPoint = Vector2.new(1,0)
 		badge.BackgroundColor3 = th.accent
 		badge.BackgroundTransparency = 0.78
-		badge.Text = "  OWNER  "
+		badge.Text = "  Creator "
 		badge.TextColor3 = th.accent
 		badge.Font = Enum.Font.GothamBold
 		badge.TextSize = 9
@@ -910,10 +1039,11 @@ do
 		return card
 	end
 
-	makeOwnerCard(homePage, "OverthaneRBX",    "Developer · Creador del Hub",    3)
-	makeOwnerCard(homePage, "ReplicatedBacon0", "Co-Owner · Desarrollo y Scripts", 4)
+	makeOwnerCard(homePage, "OverthaneRBX", "Developer · Hub Creator", 5)
+	makeOwnerCard(homePage, "ReplicatedBacon0", "Co-Owner · Test & Scripts", 6)
 
-	makeSectionLabel(homePage, "CARACTERISTICAS", 5)
+	-- ===== SECCION: CARACTERISTICAS =====
+	makeSectionLabel(homePage, "Features", 7)
 
 	local function makeFeatureRow(parent, title, desc, lo)
 		local th = T()
@@ -955,18 +1085,47 @@ do
 		return row
 	end
 
-	makeFeatureRow(homePage, "Jugadores",    "TP a jugadores · Server Hop · Rejoin",           6)
-	makeFeatureRow(homePage, "Waypoints",    "Guarda posiciones y teletransportate",            7)
-	makeFeatureRow(homePage, "ESP",          "Highlights · NameTags · Roles MM2 / PL",          8)
-	makeFeatureRow(homePage, "Movimiento",   "Speed · Jump · Noclip · God Mode · Anti-AFK",    9)
-	makeFeatureRow(homePage, "Fly",          "Vuelo WASD · Joystick movil",                    10)
-	makeFeatureRow(homePage, "Aimbot",       "Lock-On MM2 + General · Suavidad ajustable",     11)
-	makeFeatureRow(homePage, "Avatar",       "Korblox · Shoulder · Rainbow Body · Invisible",  12)
-	makeFeatureRow(homePage, "Executor",     "Tabs de script · Execute + Clear con iconos",    13)
-	makeFeatureRow(homePage, "GameScripts",  "Scripts por juego en tarjetas",                  14)
-	makeFeatureRow(homePage, "Settings",     "7 temas (2 exclusivos) · Fullbright · Hide GUI", 15)
+	makeFeatureRow(homePage, "Players", "Teleport to any player · Server Hop · Rejoin", 8)
+	makeFeatureRow(homePage, "Waypoints", "Save positions and teleport", 9)
+	makeFeatureRow(homePage, "ESP", "Highlights · NameTags · Roles MM2 / PL", 10)
+	makeFeatureRow(homePage, "Movimiento", "Speed · Jump · Noclip · God Mode · Anti-AFK", 11)
+	makeFeatureRow(homePage, "Fly", "WASD Flight · Mobile joystick support", 12)
+	makeFeatureRow(homePage, "Aimbot", "Lock-On MM2 + General · Smoothness", 13)
+	makeFeatureRow(homePage, "Avatar", "Korblox · Shoulder · Rainbow Body · Invisible", 14)
+	makeFeatureRow(homePage, "Executor", "Script tabs · Execute loadstring · Error detection", 15)
+	makeFeatureRow(homePage, "Scripts", "Scripts from other users", 16)
+	makeFeatureRow(homePage, "Settings", "7 themes (2 exclusive) · Fullbright · Hide GUI", 17)
 end
 
+--============================================================
+-- ALMACENES DE ESTADOS
+--============================================================
+espStates = {
+	getPL = nil, setPL = nil,
+	getMM2 = nil, setMM2 = nil,
+	getOG = nil, setOG = nil,
+	getNameTag = nil, setNameTag = nil,
+	getTeamOnly = nil, setTeamOnly = nil,
+}
+movementStates = {
+	getNoclip = nil, setNoclip = nil,
+	getGod = nil, setGod = nil,
+	getInfiniteJump = nil, setInfiniteJump = nil,
+	getAntiAFK = nil, setAntiAFK = nil,
+	getAntiFling = nil, setAntiFling = nil,
+}
+flyState = { get = nil, set = nil, speed = DEFAULT_FLYSPEED }
+aimbotMM2 = { get = nil, set = nil, smooth = 8, range = 500, statusDot = nil, statusLbl = nil }
+aimbotGeneral = { get = nil, set = nil, fov = 500, smooth = 4 }
+
+-- Variables de conexiones (scope global para poder apagarlas desde Settings)
+local noclipConn, godConn, antiAFKConn, antiFlingConn = nil, nil, nil, nil
+local flyConn, flyBV, flyBG = nil, nil, nil
+-- ✅ FIX 3: mm2Conn y generalConn solo en scope externo, NO re-declarar dentro del bloque Aimbot
+local mm2Conn, generalConn = nil, nil
+local antiFlingLastPos = nil
+local ANTI_FLING_MAX_VEL = 350
+local ANTI_FLING_MAX_DELTA = 80
 --============================================================
 -- PAGINA: WAYPOINTS
 --============================================================
@@ -978,7 +1137,7 @@ do
 	layout.Parent = wpPage
 	stylePadding(wpPage, 0,8,0,4)
 
-	makeSectionLabel(wpPage, "TELETRANSPORTE RAPIDO (MM2)", 0)
+	makeSectionLabel(wpPage, "Fast access", 0)
 	local quickRow = Instance.new("Frame")
 	quickRow.LayoutOrder = 1
 	quickRow.Size = UDim2.new(1,0,0,42)
@@ -1014,59 +1173,125 @@ do
 		return btn
 	end
 
-	local function getPlayerWithKnife()
-		for _, plr in ipairs(Players:GetPlayers()) do
-			if plr == player then continue end
-			local char = plr.Character
-			local bp   = plr:FindFirstChild("Backpack")
-			if (char and char:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife")) then
-				return plr
-			end
-		end
-		return nil
-	end
+	local function findGunDropCFrame()
+    local workspace = game:GetService("Workspace")
+    
+    -- Buscar en mapas activos (ajusta el nombre según tu juego)
+    for _, map in ipairs(workspace:GetChildren()) do
+        if map:IsA("Model") and map.Name:find("Map") then
+            local gunDrop = map:FindFirstChild("GunDrop", true)
+            if gunDrop and gunDrop:IsA("BasePart") then
+                return gunDrop.CFrame
+            end
+        end
+    end
+    
+    -- Búsqueda alternativa: buscar en todo el workspace
+    local gunDrop = workspace:FindFirstChild("GunDrop", true)
+    if gunDrop and gunDrop:IsA("BasePart") then
+        return gunDrop.CFrame
+    end
+    
+    return nil
+end
 
-	local function getPlayerWithGun()
-		for _, plr in ipairs(Players:GetPlayers()) do
-			if plr == player then continue end
-			local char = plr.Character
-			local bp   = plr:FindFirstChild("Backpack")
-			if (char and char:FindFirstChild("Gun")) or (bp and bp:FindFirstChild("Gun")) then
-				return plr
-			end
-		end
-		return nil
-	end
+-- Búsqueda optimizada de jugador con item específico
+local function getPlayerWithItem(itemName)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then  -- Más limpio que continue
+            local char = plr.Character
+            local bp = plr:FindFirstChild("Backpack")
+            
+            if (char and char:FindFirstChild(itemName)) or 
+               (bp and bp:FindFirstChild(itemName)) then
+                return plr
+            end
+        end
+    end
+    return nil
+end
 
-	local function teleportTo(plr)
-		if plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-			local hrp = getHRP()
-			if hrp then
-				hrp.CFrame = plr.Character.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
-			end
-		end
-	end
+-- Teleport mejorado con verificación de seguridad
+local function teleportTo(targetPlr)
+    if not targetPlr then return false end
+    
+    local targetChar = targetPlr.Character
+    if not targetChar then return false end
+    
+    local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+    local myHRP = getHRP()
+    
+    if targetHRP and myHRP then
+        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+        return true
+    end
+    return false
+end
 
-	makeQuickButton("Murder", function()
-		local p = getPlayerWithKnife()
-		if p then teleportTo(p) else print("No se encontro al asesino") end
-	end, 1)
-	makeQuickButton("Sheriff", function()
-		local p = getPlayerWithGun()
-		if p then teleportTo(p) else print("No se encontro al sheriff") end
-	end, 2)
-	makeQuickButton("Arma (Sheriff)", function()
-		local p = getPlayerWithGun()
-		if p and p.Character then
-			local gun = p.Character:FindFirstChild("Gun") or (p.Character:FindFirstChild("Backpack") and p.Character:FindFirstChild("Backpack"):FindFirstChild("Gun"))
-			if gun and gun:IsA("Tool") and gun:FindFirstChild("Handle") then
-				local hrp = getHRP()
-				if hrp then hrp.CFrame = gun.Handle.CFrame + Vector3.new(0,2,0) end
-			end
-		else
-			print("Arma no encontrada")
-		end
-	end, 3)
+-- Función para obtener el arma del sheriff
+local function obtainSheriffGun()
+    local char = player.Character
+    if not char then 
+        warn("Personaje no encontrado")
+        return false 
+    end
+    
+    local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then 
+        warn("HumanoidRootPart no encontrado")
+        return false 
+    end
+    
+    local gunCFrame = findGunDropCFrame()
+    if not gunCFrame then
+        warn("No se encontró GunDrop en el mapa")
+        return false
+    end
+    
+    -- Guardar posición original
+    local originalCF = humanoidRootPart.CFrame
+    
+    -- Teletransportar sobre el arma
+    humanoidRootPart.CFrame = gunCFrame + Vector3.new(0, 5, 0)
+    
+    -- Esperar a que el jugador agarre el arma automáticamente
+    task.wait(0.5)
+    
+    -- Regresar a la posición original
+    humanoidRootPart.CFrame = originalCF
+    
+    -- Verificar si se obtuvo el arma
+    local bp = player:FindFirstChild("Backpack")
+    if bp and bp:FindFirstChild("Gun") then
+        print("Arma obtenida exitosamente!")
+        return true
+    end
+    
+    return false
+end
+
+-- Crear botones con nombres más descriptivos
+makeQuickButton("Ir al Asesino", function()
+    local assassin = getPlayerWithItem("Knife")
+    if teleportTo(assassin) then
+        print("Teletransportado al asesino")
+    else
+        print("No se encontró al asesino")
+    end
+end, 1)
+
+makeQuickButton("Ir al Sheriff", function()
+    local sheriff = getPlayerWithItem("Gun")
+    if teleportTo(sheriff) then
+        print("Teletransportado al sheriff")
+    else
+        print("No se encontró al sheriff")
+    end
+end, 2)
+
+makeQuickButton("Obtener Arma", function()
+    obtainSheriffGun()
+end, 3)
 
 	local saveSection = Instance.new("Frame")
 	saveSection.LayoutOrder = 1
@@ -1086,6 +1311,7 @@ do
 	nameBox.BackgroundTransparency = 0.15
 	nameBox.TextColor3 = T().text
 	nameBox.PlaceholderText = "Nombre del waypoint..."
+   nameBox.Text = "   "
 	nameBox.PlaceholderColor3 = T().subtext
 	nameBox.TextSize = 14
 	nameBox.Font = Enum.Font.Gotham
@@ -1116,7 +1342,7 @@ do
 	wpListLbl.LayoutOrder = 2
 	wpListLbl.Size = UDim2.new(1,0,0,20)
 	wpListLbl.BackgroundTransparency = 1
-	wpListLbl.Text = "  WAYPOINTS GUARDADOS"
+	wpListLbl.Text = "Saved waypoints"
 	wpListLbl.TextColor3 = T().subtext
 	wpListLbl.Font = Enum.Font.GothamBold
 	wpListLbl.TextSize = 10
@@ -1194,7 +1420,7 @@ do
 			tp.Position = UDim2.new(1,-138,0.5,-17)
 			tp.BackgroundColor3 = th.bg
 			tp.BackgroundTransparency = 0.05
-			tp.Text = "TP"
+			tp.Text = "📌"
 			tp.TextColor3 = th.accent
 			tp.TextSize = 13
 			tp.Font = Enum.Font.GothamBold
@@ -1212,7 +1438,7 @@ do
 			del.Position = UDim2.new(1,-68,0.5,-17)
 			del.BackgroundColor3 = th.bg
 			del.BackgroundTransparency = 0.05
-			del.Text = "DEL"
+			del.Text = "❌"
 			del.TextColor3 = th.danger
 			del.TextSize = 13
 			del.Font = Enum.Font.GothamBold
@@ -1253,9 +1479,8 @@ do
 	_G.__HHB_refreshList = refreshList
 	refreshList()
 end
-
 --============================================================
--- PAGINA: JUGADORES
+-- PAGINA: JUGADORES (CON TP ALL TOGGLE Y FLING)
 --============================================================
 local jugadoresPage = newPage("Jugadores")
 do
@@ -1265,11 +1490,61 @@ do
 	layout.Parent = jugadoresPage
 	stylePadding(jugadoresPage, 0,8,0,4)
 
-	makeSectionLabel(jugadoresPage, "TELETRANSPORTE A JUGADORES", 1)
+	makeSectionLabel(jugadoresPage, "Teleport to any player", 1)
 
+	-- ============================================================
+	-- TOGGLE TP ALL (Reemplaza el botón simple)
+	-- ============================================================
+	local tpAllPill, setTpAll, getTpAll = makeToggleRow(jugadoresPage, "TP All (Loop)", 2)
+	local tpAllRunning = false
+	local tpAllTask = nil
+
+	local function startTpAllLoop()
+		tpAllRunning = true
+		tpAllTask = task.spawn(function()
+			while tpAllRunning do
+				for _, plr in ipairs(Players:GetPlayers()) do
+					if not tpAllRunning then break end
+					if plr ~= player then
+						local hrp = getHRP()
+						local theirHRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+						if hrp and theirHRP then
+							hrp.CFrame = theirHRP.CFrame + Vector3.new(0, 3, 0)
+							task.wait(0.8)
+						end
+					end
+				end
+				task.wait(0.5)
+			end
+		end)
+	end
+
+	local function stopTpAllLoop()
+		tpAllRunning = false
+		if tpAllTask then
+			task.cancel(tpAllTask)
+			tpAllTask = nil
+		end
+	end
+
+	tpAllPill.MouseButton1Click:Connect(function()
+		local v = not getTpAll()
+		setTpAll(v)
+		if v then
+			startTpAllLoop()
+			showToast("TP All activado")
+		else
+			stopTpAllLoop()
+			showToast("TP All desactivado")
+		end
+	end)
+
+	-- ============================================================
+	-- LISTA DE JUGADORES
+	-- ============================================================
 	local playerListContainer = Instance.new("Frame")
 	playerListContainer.Name = "PlayerListContainer"
-	playerListContainer.LayoutOrder = 2
+	playerListContainer.LayoutOrder = 3
 	playerListContainer.Size = UDim2.new(1,0,0,0)
 	playerListContainer.AutomaticSize = Enum.AutomaticSize.Y
 	playerListContainer.BackgroundTransparency = 1
@@ -1280,39 +1555,52 @@ do
 	plListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	plListLayout.Parent = playerListContainer
 
-	local tpAllBtn = Instance.new("TextButton")
-	tpAllBtn.LayoutOrder = 3
-	tpAllBtn.Size = UDim2.new(1,0,0,50)
-	tpAllBtn.BackgroundColor3 = T().bg
-	tpAllBtn.BackgroundTransparency = 0.18
-	tpAllBtn.Text = "⚡  TP a TODOS (uno por uno)"
-	tpAllBtn.TextColor3 = T().accent
-	tpAllBtn.TextSize = 14
-	tpAllBtn.Font = Enum.Font.GothamBold
-	tpAllBtn.BorderSizePixel = 0
-	tpAllBtn.AutoButtonColor = true
-	tpAllBtn.Parent = jugadoresPage
-	styleCorner(tpAllBtn, UDim.new(0,10))
-	local tpAllStroke = styleStroke(tpAllBtn, 0.75, T().accent)
-	table.insert(reg.panels, tpAllBtn)
-	table.insert(reg.accentTexts, tpAllBtn)
-	table.insert(reg.accentStrokes, tpAllStroke)
-
-	tpAllBtn.MouseButton1Click:Connect(function()
-		task.spawn(function()
-			for _, plr in ipairs(Players:GetPlayers()) do
-				if plr ~= player then
-					local hrp = getHRP()
-					local theirHRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-					if hrp and theirHRP then
-						hrp.CFrame = theirHRP.CFrame + Vector3.new(0, 3, 0)
-						task.wait(1.2)
-					end
-				end
-			end
+	-- ============================================================
+	-- FUNCIÓN FLING
+	-- ============================================================
+	local function flingPlayer(targetPlr)
+		if not targetPlr then return false end
+		local targetChar = targetPlr.Character
+		if not targetChar then return false end
+		local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+		if not targetHRP then return false end
+		
+		-- Guardar posición original
+		local originalPos = targetHRP.Position
+		
+		-- Lanzar al jugador hacia arriba con fuerza
+		local velocity = Instance.new("BodyVelocity")
+		velocity.Velocity = Vector3.new(
+			math.random(-150, 150),
+			math.random(200, 400),
+			math.random(-150, 150)
+		)
+		velocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+		velocity.Parent = targetHRP
+		
+		-- También aplicar un BodyGyro para desorientar
+		local gyro = Instance.new("BodyGyro")
+		gyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+		gyro.P = 1e6
+		gyro.CFrame = CFrame.new(targetHRP.Position) * CFrame.Angles(
+			math.rad(math.random(-180, 180)),
+			math.rad(math.random(-180, 180)),
+			math.rad(math.random(-180, 180))
+		)
+		gyro.Parent = targetHRP
+		
+		-- Limpiar después de 2 segundos
+		task.delay(2, function()
+			if velocity and velocity.Parent then velocity:Destroy() end
+			if gyro and gyro.Parent then gyro:Destroy() end
 		end)
-	end)
+		
+		return true
+	end
 
+	-- ============================================================
+	-- REFRESCAR LISTA DE JUGADORES
+	-- ============================================================
 	local function refreshPlayerList()
 		for _, ch in ipairs(playerListContainer:GetChildren()) do
 			if ch:IsA("Frame") then ch:Destroy() end
@@ -1324,7 +1612,7 @@ do
 			local row = Instance.new("Frame")
 			row.Name = "PlayerRow"
 			row.LayoutOrder = idx
-			row.Size = UDim2.new(1,0,0,54)
+			row.Size = UDim2.new(1,0,0,60) -- Más alto para botones
 			row.BackgroundColor3 = th.bg
 			row.BackgroundTransparency = 0.20
 			row.BorderSizePixel = 0
@@ -1333,6 +1621,7 @@ do
 			styleStroke(row, 0.88)
 			table.insert(reg.panels, row)
 
+			-- Avatar circular
 			local avatarCircle = Instance.new("Frame")
 			avatarCircle.Size = UDim2.new(0,36,0,36)
 			avatarCircle.Position = UDim2.new(0,10,0.5,-18)
@@ -1351,6 +1640,7 @@ do
 			avatarLetter.Parent = avatarCircle
 			table.insert(reg.accentTexts, avatarLetter)
 
+			-- Nombre
 			local nameLbl = Instance.new("TextLabel")
 			nameLbl.Size = UDim2.new(1,-170,0,20)
 			nameLbl.Position = UDim2.new(0,54,0,8)
@@ -1364,6 +1654,7 @@ do
 			nameLbl.Parent = row
 			table.insert(reg.texts, nameLbl)
 
+			-- Usuario
 			local userLbl = Instance.new("TextLabel")
 			userLbl.Size = UDim2.new(1,-170,0,14)
 			userLbl.Position = UDim2.new(0,54,0,30)
@@ -1376,30 +1667,121 @@ do
 			userLbl.Parent = row
 			table.insert(reg.subtexts, userLbl)
 
-			local tpBtn = Instance.new("TextButton")
-			tpBtn.Size = UDim2.new(0,62,0,34)
-			tpBtn.Position = UDim2.new(1,-70,0.5,-17)
+			-- ============================================================
+			-- BOTONES MÁS CUADRADOS
+			-- ============================================================
+			local buttonSize = 38
+			local buttonSpacing = 6
+			local totalButtons = 2
+			local totalWidth = (buttonSize * totalButtons) + (buttonSpacing * (totalButtons - 1))
+			
+			local btnContainer = Instance.new("Frame")
+			btnContainer.Size = UDim2.new(0, totalWidth, 0, buttonSize)
+			btnContainer.Position = UDim2.new(1, -totalWidth - 10, 0.5, -buttonSize/2)
+			btnContainer.BackgroundTransparency = 1
+			btnContainer.BorderSizePixel = 0
+			btnContainer.Parent = row
+
+			local btnLayout = Instance.new("UIListLayout")
+			btnLayout.FillDirection = Enum.FillDirection.Horizontal
+			btnLayout.Padding = UDim.new(0, buttonSpacing)
+			btnLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+			btnLayout.Parent = btnContainer
+
+			-- Botón TP (cuadrado)
+			local tpBtn = Instance.new("ImageButton")
+			tpBtn.Size = UDim2.new(0, buttonSize, 0, buttonSize)
 			tpBtn.BackgroundColor3 = th.bg
-			tpBtn.BackgroundTransparency = 0.05
-			tpBtn.Text = "TP"
-			tpBtn.TextColor3 = th.accent
-			tpBtn.TextSize = 13
-			tpBtn.Font = Enum.Font.GothamBold
+			tpBtn.BackgroundTransparency = 0.1
+			tpBtn.Image = TP_ICON
+			tpBtn.ImageColor3 = th.accent
+			tpBtn.ScaleType = Enum.ScaleType.Fit
 			tpBtn.BorderSizePixel = 0
-			tpBtn.AutoButtonColor = true
-			tpBtn.Parent = row
+			tpBtn.AutoButtonColor = false
+			tpBtn.Parent = btnContainer
 			styleCorner(tpBtn, UDim.new(0,8))
-			local tpStroke = styleStroke(tpBtn, 0.82, th.accent)
+			local tpStroke = styleStroke(tpBtn, 0.7, th.accent)
 			table.insert(reg.panels, tpBtn)
-			table.insert(reg.accentTexts, tpBtn)
 			table.insert(reg.accentStrokes, tpStroke)
 
+			-- Tooltip TP
+			local tpTip = Instance.new("TextLabel")
+			tpTip.Size = UDim2.new(0,0,0,18)
+			tpTip.AutomaticSize = Enum.AutomaticSize.X
+			tpTip.Position = UDim2.new(0.5,0,1,4)
+			tpTip.AnchorPoint = Vector2.new(0.5,0)
+			tpTip.BackgroundColor3 = Color3.fromRGB(0,0,0)
+			tpTip.BackgroundTransparency = 0.8
+			tpTip.Text = "Teleport"
+			tpTip.TextColor3 = Color3.new(1,1,1)
+			tpTip.Font = Enum.Font.Gotham
+			tpTip.TextSize = 9
+			tpTip.TextXAlignment = Enum.TextXAlignment.Center
+			tpTip.BorderSizePixel = 0
+			tpTip.Visible = false
+			tpTip.Parent = tpBtn
+			styleCorner(tpTip, UDim.new(1,0))
+			stylePadding(tpTip, 2,2,6,6)
+			tpBtn.MouseEnter:Connect(function() tpTip.Visible = true end)
+			tpBtn.MouseLeave:Connect(function() tpTip.Visible = false end)
+
+			-- Botón Fling (cuadrado)
+			local flingBtn = Instance.new("ImageButton")
+			flingBtn.Size = UDim2.new(0, buttonSize, 0, buttonSize)
+			flingBtn.BackgroundColor3 = th.bg
+			flingBtn.BackgroundTransparency = 0.1
+			flingBtn.Image = FLING_ICON
+			flingBtn.ImageColor3 = th.danger
+			flingBtn.ScaleType = Enum.ScaleType.Fit
+			flingBtn.BorderSizePixel = 0
+			flingBtn.AutoButtonColor = false
+			flingBtn.Parent = btnContainer
+			styleCorner(flingBtn, UDim.new(0,8))
+			local flingStroke = styleStroke(flingBtn, 0.7, th.danger)
+			table.insert(reg.panels, flingBtn)
+			table.insert(reg.dangerStrokes, flingStroke)
+
+			-- Tooltip Fling
+			local flingTip = Instance.new("TextLabel")
+			flingTip.Size = UDim2.new(0,0,0,18)
+			flingTip.AutomaticSize = Enum.AutomaticSize.X
+			flingTip.Position = UDim2.new(0.5,0,1,4)
+			flingTip.AnchorPoint = Vector2.new(0.5,0)
+			flingTip.BackgroundColor3 = Color3.fromRGB(0,0,0)
+			flingTip.BackgroundTransparency = 0.8
+			flingTip.Text = "Fling"
+			flingTip.TextColor3 = Color3.new(1,1,1)
+			flingTip.Font = Enum.Font.Gotham
+			flingTip.TextSize = 9
+			flingTip.TextXAlignment = Enum.TextXAlignment.Center
+			flingTip.BorderSizePixel = 0
+			flingTip.Visible = false
+			flingTip.Parent = flingBtn
+			styleCorner(flingTip, UDim.new(1,0))
+			stylePadding(flingTip, 2,2,6,6)
+			flingBtn.MouseEnter:Connect(function() flingTip.Visible = true end)
+			flingBtn.MouseLeave:Connect(function() flingTip.Visible = false end)
+
+			-- Capturar jugador
 			local capturedPlr = plr
+			
+			-- Acción TP
 			tpBtn.MouseButton1Click:Connect(function()
 				local hrp = getHRP()
 				local theirHRP = capturedPlr.Character and capturedPlr.Character:FindFirstChild("HumanoidRootPart")
 				if hrp and theirHRP then
 					hrp.CFrame = theirHRP.CFrame + Vector3.new(0, 3, 0)
+					showToast("Teletransportado a " .. capturedPlr.DisplayName)
+				end
+			end)
+
+			-- Acción Fling
+			flingBtn.MouseButton1Click:Connect(function()
+				if flingPlayer(capturedPlr) then
+					showToast("Fling aplicado a " .. capturedPlr.DisplayName .. "!")
+				else
+					showToast("No se pudo aplicar fling")
 				end
 			end)
 		end
@@ -1408,7 +1790,7 @@ do
 			local noPlayers = Instance.new("TextLabel")
 			noPlayers.Size = UDim2.new(1,0,0,44)
 			noPlayers.BackgroundTransparency = 1
-			noPlayers.Text = "No hay otros jugadores en el servidor."
+			noPlayers.Text = "There's not Other players in this server"
 			noPlayers.TextColor3 = T().subtext
 			noPlayers.Font = Enum.Font.Gotham
 			noPlayers.TextSize = 13
@@ -1417,12 +1799,15 @@ do
 		end
 	end
 
+	-- ============================================================
+	-- BOTÓN ACTUALIZAR LISTA
+	-- ============================================================
 	local refreshBtn = Instance.new("TextButton")
 	refreshBtn.LayoutOrder = 4
 	refreshBtn.Size = UDim2.new(1,0,0,42)
 	refreshBtn.BackgroundColor3 = T().bg
 	refreshBtn.BackgroundTransparency = 0.28
-	refreshBtn.Text = "↻  Actualizar lista de jugadores"
+	refreshBtn.Text = "Update list"
 	refreshBtn.TextColor3 = T().subtext
 	refreshBtn.TextSize = 13
 	refreshBtn.Font = Enum.Font.GothamSemibold
@@ -1439,14 +1824,17 @@ do
 	Players.PlayerAdded:Connect(function() task.wait(1); refreshPlayerList() end)
 	Players.PlayerRemoving:Connect(function() task.wait(0.1); refreshPlayerList() end)
 
-	makeSectionLabel(jugadoresPage, "SERVIDOR", 5)
+	-- ============================================================
+	-- SECCIÓN SERVER
+	-- ============================================================
+	makeSectionLabel(jugadoresPage, "Server", 5)
 
 	local rejoinBtn = Instance.new("TextButton")
 	rejoinBtn.LayoutOrder = 6
 	rejoinBtn.Size = UDim2.new(1,0,0,50)
 	rejoinBtn.BackgroundColor3 = T().bg
 	rejoinBtn.BackgroundTransparency = 0.22
-	rejoinBtn.Text = "Rejoin (mismo servidor)"
+	rejoinBtn.Text = " Rejoin"
 	rejoinBtn.TextColor3 = T().text
 	rejoinBtn.TextSize = 14
 	rejoinBtn.Font = Enum.Font.GothamSemibold
@@ -1470,7 +1858,7 @@ do
 	serverHopBtn.Size = UDim2.new(1,0,0,50)
 	serverHopBtn.BackgroundColor3 = T().bg
 	serverHopBtn.BackgroundTransparency = 0.22
-	serverHopBtn.Text = "Server Hop (servidor aleatorio)"
+	serverHopBtn.Text = " Server Hop"
 	serverHopBtn.TextColor3 = T().text
 	serverHopBtn.TextSize = 14
 	serverHopBtn.Font = Enum.Font.GothamSemibold
@@ -1500,7 +1888,7 @@ do
 		end)
 	end)
 
-	-- ✅ FIX 5: exponer refreshPlayerList para que applyTheme pueda llamarla
+	-- Exponer refresh
 	HHBFuncs.refreshPlayers = refreshPlayerList
 	refreshPlayerList()
 end
@@ -1516,13 +1904,13 @@ do
 	layout.Parent = espPage
 	stylePadding(espPage, 0,8,0,4)
 
-	makeSectionLabel(espPage, "PRESETS DE JUEGO", 1)
+	makeSectionLabel(espPage, "ESP or Xray", 1)
 	local pillPL, setPL, getPL = makeToggleRow(espPage, "Prison Life", 2)
 	local pillMM2, setMM2, getMM2 = makeToggleRow(espPage, "Murder Mystery 2", 3)
-	local pillOG, setOG, getOG = makeToggleRow(espPage, "Otros Juegos", 4)
-	makeSectionLabel(espPage, "OPCIONES", 5)
-	local pillNameTag, setNameTag, getNameTag = makeToggleRow(espPage, "Etiquetas de nombre", 6)
-	local pillTeamOnly, setTeamOnly, getTeamOnly = makeToggleRow(espPage, "Solo Enemigos (PL)", 7)
+	local pillOG, setOG, getOG = makeToggleRow(espPage, "Other games", 4)
+	makeSectionLabel(espPage, "Options", 5)
+	local pillNameTag, setNameTag, getNameTag = makeToggleRow(espPage, "Nametag", 6)
+	local pillTeamOnly, setTeamOnly, getTeamOnly = makeToggleRow(espPage, "Just enemies", 7)
 
 	espStates.getPL = getPL; espStates.setPL = setPL
 	espStates.getMM2 = getMM2; espStates.setMM2 = setMM2
@@ -1551,9 +1939,8 @@ do
 		if getPL() then disableESP_PL(); enableESP_PL() end
 	end)
 end
-
 --============================================================
--- PAGINA: MOVIMIENTO
+-- PAGINA: MOVIMIENTO (CON FLY INTEGRADO - CORREGIDA)
 --============================================================
 local movPage = newPage("Movimiento")
 do
@@ -1563,30 +1950,118 @@ do
 	layout.Parent = movPage
 	stylePadding(movPage, 0,8,0,4)
 
-	makeSectionLabel(movPage, "VELOCIDAD", 1)
+	-- ============================================================
+	-- SECCIÓN FLY (ARRIBA DEL TODO)
+	-- ============================================================
+	makeSectionLabel(movPage, "Fly", 1)
+	local pillFly, setFly, getFly = makeToggleRow(movPage, "Active Fly", 2)
+	local currentFlySpeed = DEFAULT_FLYSPEED
+	makeSliderRow(movPage, "Fly Speed", 5, 200, DEFAULT_FLYSPEED, function(v) currentFlySpeed = v end, 3)
+	
+	local flyInfo = Instance.new("TextLabel")
+	flyInfo.Size = UDim2.new(1,0,0,32)
+	flyInfo.LayoutOrder = 4
+	flyInfo.BackgroundColor3 = T().bg
+	flyInfo.BackgroundTransparency = 0.15
+	flyInfo.Text = "  WASD + Space / Ctrl"
+	flyInfo.TextColor3 = T().subtext
+	flyInfo.Font = Enum.Font.Gotham
+	flyInfo.TextSize = 11
+	flyInfo.TextXAlignment = Enum.TextXAlignment.Left
+	flyInfo.TextWrapped = true
+	flyInfo.BorderSizePixel = 0
+	flyInfo.Parent = movPage
+	styleCorner(flyInfo, UDim.new(0,8))
+	styleStroke(flyInfo, 0.85)
+	table.insert(reg.panels, flyInfo)
+	table.insert(reg.subtexts, flyInfo)
+
+	-- Variables de Fly
+	flyState.get = getFly; flyState.set = setFly; flyState.speed = currentFlySpeed
+
+	local function startFly()
+		local hrp = getHRP(); local hum = getHumanoid()
+		if not hrp or not hum then return end
+		hum.PlatformStand = true
+		flyBV = Instance.new("BodyVelocity")
+		flyBV.Velocity = Vector3.zero
+		flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+		flyBV.Parent = hrp
+		flyBG = Instance.new("BodyGyro")
+		flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+		flyBG.P = 1e4
+		flyBG.CFrame = hrp.CFrame
+		flyBG.Parent = hrp
+		flyConn = RunService.Heartbeat:Connect(function()
+			local h = getHRP(); if not h then return end
+			local cf = workspace.CurrentCamera.CFrame
+			local mv = Vector3.zero
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv += cf.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv -= cf.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv -= cf.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv += cf.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then mv += Vector3.yAxis end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then mv -= Vector3.yAxis end
+			if mv.Magnitude < 0.01 then
+				local hum2 = getHumanoid()
+				if hum2 then local md = hum2.MoveDirection
+					if md.Magnitude > 0.1 then mv = md * Vector3.new(1,0,1) end
+				end
+			end
+			flyBV.Velocity = mv.Magnitude > 0 and mv.Unit * currentFlySpeed or Vector3.zero
+			flyBG.CFrame = cf
+		end)
+	end
+
+	local function stopFly()
+		if flyConn then flyConn:Disconnect(); flyConn = nil end
+		if flyBV then flyBV:Destroy(); flyBV = nil end
+		if flyBG then flyBG:Destroy(); flyBG = nil end
+		local hum = getHumanoid(); if hum then hum.PlatformStand = false end
+	end
+
+	-- Exponer para HHBFuncs
+	HHBFuncs.startFly = startFly
+	HHBFuncs.stopFly = stopFly
+
+	pillFly.MouseButton1Click:Connect(function()
+		local v = not getFly(); setFly(v)
+		if v then startFly() else stopFly() end
+	end)
+	player.CharacterAdded:Connect(function()
+		if getFly() then setFly(false); stopFly() end
+	end)
+
+	-- ============================================================
+	-- SECCIÓN SPEED
+	-- ============================================================
+	makeSectionLabel(movPage, "Speed", 5)
 	local currentWalkSpeed = DEFAULT_WALKSPEED
 	local currentJumpPower = DEFAULT_JUMPPOWER
-	makeSliderRow(movPage,"Walk Speed",4,150,DEFAULT_WALKSPEED, function(v)
+	makeSliderRow(movPage, "Walk Speed", 4, 150, DEFAULT_WALKSPEED, function(v)
 		currentWalkSpeed = v
 		local hum = getHumanoid(); if hum then hum.WalkSpeed = v end
-	end, 2)
-	makeSliderRow(movPage,"Jump Power",10,200,DEFAULT_JUMPPOWER, function(v)
+	end, 6)
+	makeSliderRow(movPage, "Jump Power", 10, 200, DEFAULT_JUMPPOWER, function(v)
 		currentJumpPower = v
 		local hum = getHumanoid(); if hum then hum.JumpPower = v end
-	end, 3)
+	end, 7)
 	player.CharacterAdded:Connect(function(char)
 		task.wait(0.5)
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if hum then hum.WalkSpeed = currentWalkSpeed; hum.JumpPower = currentJumpPower end
 	end)
 
-	makeSectionLabel(movPage, "MODS DEL JUGADOR", 4)
+	-- ============================================================
+	-- SECCIÓN MODIFICACIONES
+	-- ============================================================
+	makeSectionLabel(movPage, "Modifications or mods", 8)
 
-	local pillNoclip, setNoclip, getNoclip = makeToggleRow(movPage, "Noclip", 5)
-	local pillGod, setGod, getGod = makeToggleRow(movPage, "God Mode", 6)
-	local pillIJ, setIJ, getIJ = makeToggleRow(movPage, "Salto Infinito", 7)
-	local pillAntiAFK, setAntiAFK, getAntiAFK = makeToggleRow(movPage, "Anti-AFK", 8)
-	local pillAntiFling, setAntiFling, getAntiFling = makeToggleRow(movPage, "Anti-Fling", 9)
+	local pillNoclip, setNoclip, getNoclip = makeToggleRow(movPage, "Noclip", 9)
+	local pillGod, setGod, getGod = makeToggleRow(movPage, "God Mode", 10)
+	local pillIJ, setIJ, getIJ = makeToggleRow(movPage, "Infinite Jump", 11)
+	local pillAntiAFK, setAntiAFK, getAntiAFK = makeToggleRow(movPage, "Anti-AFK", 12)
+	local pillAntiFling, setAntiFling, getAntiFling = makeToggleRow(movPage, "Anti-Fling", 13)
 
 	movementStates.getNoclip = getNoclip; movementStates.setNoclip = setNoclip
 	movementStates.getGod = getGod; movementStates.setGod = setGod
@@ -1676,9 +2151,12 @@ do
 		end
 	end)
 
-	makeSectionLabel(movPage, "ANIMACIONES", 10)
+	-- ============================================================
+	-- SECCIÓN TROLL
+	-- ============================================================
+	makeSectionLabel(movPage, "Troll", 14)
 	local laughBtn = Instance.new("TextButton")
-	laughBtn.LayoutOrder = 11
+	laughBtn.LayoutOrder = 15
 	laughBtn.Size = UDim2.new(1,0,0,50)
 	laughBtn.BackgroundColor3 = T().bg
 	laughBtn.BackgroundTransparency = 0.22
@@ -1697,10 +2175,10 @@ do
 
 	laughBtn.MouseButton1Click:Connect(function()
 		local char = player.Character
-		local hum  = getHumanoid()
+		local hum = getHumanoid()
 		if not char or not hum then return end
 		pcall(function()
-			local rs  = game:GetService("ReplicatedStorage")
+			local rs = game:GetService("ReplicatedStorage")
 			local evt = rs:FindFirstChild("DefaultChatSystemChatEvents")
 			if evt then
 				local req = evt:FindFirstChild("SayMessageRequest")
@@ -1723,86 +2201,15 @@ do
 		end)
 	end)
 
-	makeSectionLabel(movPage, "ZONA DE PELIGRO", 12)
-	local resetBtn = makeDangerBtn(movPage, "Resetear personaje", 13)
+	-- ============================================================
+	-- SECCIÓN RESET
+	-- ============================================================
+	makeSectionLabel(movPage, "Reset Character", 16)
+	local resetBtn = makeDangerBtn(movPage, "Autokill", 17)
 	resetBtn.MouseButton1Click:Connect(function()
 		local hum = getHumanoid(); if hum then hum.Health = 0 end
 	end)
 end
-
---============================================================
--- PAGINA: FLY
---============================================================
-local flyPage = newPage("Fly")
-do
-	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0,10)
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Parent = flyPage
-	stylePadding(flyPage, 0,8,0,4)
-
-	makeSectionLabel(flyPage, "VUELO", 1)
-	local pillFly, setFly, getFly = makeToggleRow(flyPage, "Activar Fly", 2)
-	local currentFlySpeed = DEFAULT_FLYSPEED
-	makeSliderRow(flyPage,"Velocidad de vuelo",5,200,DEFAULT_FLYSPEED, function(v) currentFlySpeed = v end, 3)
-	makeInfoCard(flyPage, "PC: WASD + Space/Ctrl o Q/E\nMovil: usa el joystick del personaje.", 4)
-
-	flyState.get = getFly; flyState.set = setFly; flyState.speed = currentFlySpeed
-
-	local function startFly()
-		local hrp = getHRP(); local hum = getHumanoid()
-		if not hrp or not hum then return end
-		hum.PlatformStand = true
-		flyBV = Instance.new("BodyVelocity")
-		flyBV.Velocity = Vector3.zero
-		flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
-		flyBV.Parent = hrp
-		flyBG = Instance.new("BodyGyro")
-		flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
-		flyBG.P = 1e4
-		flyBG.CFrame = hrp.CFrame
-		flyBG.Parent = hrp
-		flyConn = RunService.Heartbeat:Connect(function()
-			local h = getHRP(); if not h then return end
-			local cf = workspace.CurrentCamera.CFrame
-			local mv = Vector3.zero
-			if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv += cf.LookVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv -= cf.LookVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv -= cf.RightVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv += cf.RightVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then mv += Vector3.yAxis end
-			if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then mv -= Vector3.yAxis end
-			if mv.Magnitude < 0.01 then
-				local hum2 = getHumanoid()
-				if hum2 then local md = hum2.MoveDirection
-					if md.Magnitude > 0.1 then mv = md * Vector3.new(1,0,1) end
-				end
-			end
-			flyBV.Velocity = mv.Magnitude > 0 and mv.Unit * currentFlySpeed or Vector3.zero
-			flyBG.CFrame = cf
-		end)
-	end
-
-	local function stopFly()
-		if flyConn then flyConn:Disconnect(); flyConn = nil end
-		if flyBV then flyBV:Destroy(); flyBV = nil end
-		if flyBG then flyBG:Destroy(); flyBG = nil end
-		local hum = getHumanoid(); if hum then hum.PlatformStand = false end
-	end
-
-	-- ✅ FIX 2: exponer via HHBFuncs para uso en Settings
-	HHBFuncs.startFly = startFly
-	HHBFuncs.stopFly  = stopFly
-
-	pillFly.MouseButton1Click:Connect(function()
-		local v = not getFly(); setFly(v)
-		if v then startFly() else stopFly() end
-	end)
-	player.CharacterAdded:Connect(function()
-		if getFly() then setFly(false); stopFly() end
-	end)
-end
-
 --============================================================
 -- PAGINA: AIMBOT
 --============================================================
@@ -1814,19 +2221,19 @@ do
 	layout.Parent = aimbotPage
 	stylePadding(aimbotPage, 0,10,0,4)
 
-	makeSectionLabel(aimbotPage, "MURDER MYSTERY 2", 1)
+	makeSectionLabel(aimbotPage, "Murder Mistery", 1)
 	local pillAimbotMM2, setStateAimbotMM2, getStateAimbotMM2 = makeToggleRow(aimbotPage, "Lock-On Asesino", 2)
 	local aimbotSmooth = 8
-	makeSliderRow(aimbotPage, "Suavidad (MM2)", 1, 30, aimbotSmooth, function(v) aimbotSmooth = v end, 3)
+	makeSliderRow(aimbotPage, "Smoothness", 1, 30, aimbotSmooth, function(v) aimbotSmooth = v end, 3)
 	local aimbotRange = 500
-	makeSliderRow(aimbotPage, "Rango máximo (studs)", 50, 1000, aimbotRange, function(v) aimbotRange = v end, 4)
+	makeSliderRow(aimbotPage, "Distance", 50, 1000, aimbotRange, function(v) aimbotRange = v end, 4)
 
-	makeSectionLabel(aimbotPage, "AIMBOT GENERAL", 5)
+	makeSectionLabel(aimbotPage, "Normal Aimbot", 5)
 	local pillAimbotGeneral, setStateAimbotGeneral, getStateAimbotGeneral = makeToggleRow(aimbotPage, "Aimbot General (Mouse Lock)", 6)
 	local generalFOV = 500
 	makeSliderRow(aimbotPage, "FOV (píxeles)", 50, 1200, generalFOV, function(v) generalFOV = v end, 7)
 	local generalSmooth = 4
-	makeSliderRow(aimbotPage, "Suavidad (General)", 1, 15, generalSmooth, function(v) generalSmooth = v end, 8)
+	makeSliderRow(aimbotPage, "Smoothness", 1, 15, generalSmooth, function(v) generalSmooth = v end, 8)
 
 	local aimbotStatusBox = Instance.new("Frame")
 	aimbotStatusBox.LayoutOrder = 9
@@ -1851,7 +2258,7 @@ do
 	aimbotStatusLbl.Size = UDim2.new(1,-34,1,0)
 	aimbotStatusLbl.Position = UDim2.new(0,32,0,0)
 	aimbotStatusLbl.BackgroundTransparency = 1
-	aimbotStatusLbl.Text = "Sin asesino detectado"
+	aimbotStatusLbl.Text = "Not murderer detected"
 	aimbotStatusLbl.TextColor3 = T().subtext
 	aimbotStatusLbl.TextXAlignment = Enum.TextXAlignment.Left
 	aimbotStatusLbl.Font = Enum.Font.GothamSemibold
@@ -1860,7 +2267,7 @@ do
 	table.insert(reg.subtexts, aimbotStatusLbl)
 
 	makeInfoCard(aimbotPage,
-		"• Lock-On Asesino: solo funciona en MM2.\n• Aimbot General: se ajusta al jugador más cerca del cursor.",
+		"• Lock-On Asesino: You justo can use in MM2.\n• Aimbot general is for any player",
 		10)
 
 	-- ✅ FIX 3: NO re-declarar mm2Conn/generalConn aquí (usan las del scope externo)
@@ -1892,7 +2299,7 @@ do
 			local dist = (myHRP.Position - murderHRP.Position).Magnitude
 			if dist > aimbotRange then
 				aimbotStatusDot.BackgroundColor3 = Color3.fromRGB(255,180,0)
-				aimbotStatusLbl.Text = murderer.DisplayName.." — fuera de rango"
+				aimbotStatusLbl.Text = murderer.DisplayName.." Out of range"
 				aimbotStatusLbl.TextColor3 = Color3.fromRGB(255,180,0)
 				return
 			end
@@ -1924,7 +2331,7 @@ do
 			aimbotStatusDot.BackgroundColor3 = T().knobOff
 		end
 		if aimbotStatusLbl and aimbotStatusLbl.Parent then
-			aimbotStatusLbl.Text       = "Sin asesino detectado"
+			aimbotStatusLbl.Text       = "Not murderer detected"
 			aimbotStatusLbl.TextColor3 = T().subtext
 		end
 	end
@@ -2130,7 +2537,7 @@ do
 	for _, item in ipairs(avatarCatalog) do item.state = false end
 
 	makeInfoCard(avatarPage, "Efectos solo visibles localmente. Se reactivan al respawnear.", 1)
-	makeSectionLabel(avatarPage, "CATALOGO DE AVATAR", 2)
+	makeSectionLabel(avatarPage, "Avatar features", 2)
 
 	for idx, item in ipairs(avatarCatalog) do
 		local card = Instance.new("Frame")
@@ -2183,7 +2590,7 @@ do
 		equipBtn.Position = UDim2.new(1,-74,0.5,-17)
 		equipBtn.BackgroundColor3 = T().bg
 		equipBtn.BackgroundTransparency = 0.05
-		equipBtn.Text = "Equipar"
+		equipBtn.Text = "Equip"
 		equipBtn.TextColor3 = T().accent
 		equipBtn.TextSize = 12
 		equipBtn.Font = Enum.Font.GothamBold
@@ -2199,12 +2606,12 @@ do
 		local function updateCardVisual()
 			if item.state then
 				dot.BackgroundColor3  = T().accent
-				equipBtn.Text         = "Quitar"
+				equipBtn.Text         = "UnEquip"
 				equipBtn.TextColor3   = T().danger
 				equipStroke.Color     = T().danger
 			else
 				dot.BackgroundColor3  = T().knobOff
-				equipBtn.Text         = "Equipar"
+				equipBtn.Text         = "Equip"
 				equipBtn.TextColor3   = T().accent
 				equipStroke.Color     = T().accent
 			end
@@ -2241,7 +2648,7 @@ do
 end
 
 --============================================================
--- PAGINA: EXECUTOR
+-- PAGINA: EXECUTOR (VERSIÓN PROFESIONAL - CORREGIDA)
 --============================================================
 local executorPage = newPage("Executor")
 do
@@ -2251,32 +2658,35 @@ do
 
 	local th = T()
 
+	-- Título minimalista
 	local execLabel = Instance.new("TextLabel")
 	execLabel.Size = UDim2.new(1,0,0,22)
 	execLabel.Position = UDim2.new(0,0,0,4)
 	execLabel.BackgroundTransparency = 1
-	execLabel.Text = "  EXECUTOR LOCAL"
-	execLabel.TextColor3 = th.subtext
+	execLabel.Text = "Happy Hub Executor"
+	execLabel.TextColor3 = th.accent
 	execLabel.Font = Enum.Font.GothamBold
-	execLabel.TextSize = 11
+	execLabel.TextSize = 12
 	execLabel.TextXAlignment = Enum.TextXAlignment.Left
 	execLabel.Parent = executorPage
-	table.insert(reg.subtexts, execLabel)
+	table.insert(reg.accentTexts, execLabel)
+	
 	local execLine = Instance.new("Frame")
-	execLine.Size = UDim2.new(0.38,0,0,1)
+	execLine.Size = UDim2.new(0.25,0,0,1.5)
 	execLine.Position = UDim2.new(0,0,1,-1)
 	execLine.BackgroundColor3 = th.accent
-	execLine.BackgroundTransparency = 0.6
+	execLine.BackgroundTransparency = 0.4
 	execLine.BorderSizePixel = 0
 	execLine.Parent = execLabel
 	table.insert(reg.accentBgs, execLine)
 
+	-- Tabs (más compactos y elegantes)
 	local TAB_COUNT = 3
 	local execTabData = {}
 	for i = 1, TAB_COUNT do execTabData[i] = { name = "Tab "..i, content = "" } end
 
 	local execTabBar = Instance.new("Frame")
-	execTabBar.Size = UDim2.new(1,0,0,34)
+	execTabBar.Size = UDim2.new(1,0,0,30)
 	execTabBar.Position = UDim2.new(0,0,0,28)
 	execTabBar.BackgroundTransparency = 1
 	execTabBar.BorderSizePixel = 0
@@ -2284,7 +2694,7 @@ do
 
 	local execTabBarLayout = Instance.new("UIListLayout")
 	execTabBarLayout.FillDirection = Enum.FillDirection.Horizontal
-	execTabBarLayout.Padding = UDim.new(0,5)
+	execTabBarLayout.Padding = UDim.new(0,4)
 	execTabBarLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	execTabBarLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	execTabBarLayout.Parent = execTabBar
@@ -2312,20 +2722,21 @@ do
 		end
 	end
 
+	-- Estilo moderno para tabs
 	for i = 1, TAB_COUNT do
 		local tabBtn = Instance.new("TextButton")
-		tabBtn.Size = UDim2.new(0,68,0,30)
+		tabBtn.Size = UDim2.new(0,60,0,26)
 		tabBtn.BackgroundColor3 = (i == 1) and T().accent or T().bg
 		tabBtn.BackgroundTransparency = (i == 1) and 0 or 0.30
 		tabBtn.Text = execTabData[i].name
 		tabBtn.TextColor3 = (i == 1) and T().bg or T().subtext
-		tabBtn.TextSize = 12
+		tabBtn.TextSize = 11
 		tabBtn.Font = Enum.Font.GothamSemibold
 		tabBtn.BorderSizePixel = 0
 		tabBtn.AutoButtonColor = false
 		tabBtn.LayoutOrder = i
 		tabBtn.Parent = execTabBar
-		styleCorner(tabBtn, UDim.new(0,8))
+		styleCorner(tabBtn, UDim.new(0,6))
 
 		local tabStroke = Instance.new("UIStroke")
 		tabStroke.Color = T().accent
@@ -2347,58 +2758,61 @@ do
 		end)
 	end
 
+	-- Editor de código (más espacioso, con espacio para botones)
 	local codeWrapper = Instance.new("Frame")
-	codeWrapper.Size = UDim2.new(1,0,1,-144)
-	codeWrapper.Position = UDim2.new(0,0,0,66)
-	codeWrapper.BackgroundColor3 = Color3.fromRGB(8,8,12)
+	codeWrapper.Size = UDim2.new(1,0,1,-130) -- Reducido para dar espacio a los botones
+	codeWrapper.Position = UDim2.new(0,0,0,62)
+	codeWrapper.BackgroundColor3 = Color3.fromRGB(6,6,10)
 	codeWrapper.BackgroundTransparency = 0
 	codeWrapper.BorderSizePixel = 0
 	codeWrapper.Parent = executorPage
-	styleCorner(codeWrapper, UDim.new(0,10))
+	styleCorner(codeWrapper, UDim.new(0,8))
 	local codeStroke = Instance.new("UIStroke")
 	codeStroke.Color = th.accent
 	codeStroke.Thickness = 1
-	codeStroke.Transparency = 0.65
+	codeStroke.Transparency = 0.6
 	codeStroke.Parent = codeWrapper
 	table.insert(reg.accentStrokes, codeStroke)
 
+	-- Números de línea (más delgados y discretos)
 	local lineNumBg = Instance.new("Frame")
-	lineNumBg.Size = UDim2.new(0,30,1,0)
-	lineNumBg.BackgroundColor3 = Color3.fromRGB(14,14,20)
+	lineNumBg.Size = UDim2.new(0,24,1,0) -- Más estrecho
+	lineNumBg.BackgroundColor3 = Color3.fromRGB(10,10,16)
 	lineNumBg.BackgroundTransparency = 0
 	lineNumBg.BorderSizePixel = 0
 	lineNumBg.Parent = codeWrapper
 	local lineNumCorner = Instance.new("UICorner")
-	lineNumCorner.CornerRadius = UDim.new(0,10)
+	lineNumCorner.CornerRadius = UDim.new(0,8)
 	lineNumCorner.Parent = lineNumBg
 	local lineNumPatch = Instance.new("Frame")
-	lineNumPatch.Size = UDim2.new(0,10,1,0)
-	lineNumPatch.Position = UDim2.new(1,-10,0,0)
-	lineNumPatch.BackgroundColor3 = Color3.fromRGB(14,14,20)
+	lineNumPatch.Size = UDim2.new(0,6,1,0)
+	lineNumPatch.Position = UDim2.new(1,-6,0,0)
+	lineNumPatch.BackgroundColor3 = Color3.fromRGB(10,10,16)
 	lineNumPatch.BackgroundTransparency = 0
 	lineNumPatch.BorderSizePixel = 0
 	lineNumPatch.Parent = lineNumBg
 	local lineNumLabel = Instance.new("TextLabel")
 	lineNumLabel.Size = UDim2.new(1,0,1,-8)
-	lineNumLabel.Position = UDim2.new(0,0,0,6)
+	lineNumLabel.Position = UDim2.new(0,0,0,5)
 	lineNumLabel.BackgroundTransparency = 1
 	lineNumLabel.Text = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20"
-	lineNumLabel.TextColor3 = Color3.fromRGB(80,80,110)
+	lineNumLabel.TextColor3 = Color3.fromRGB(50,50,80)
 	lineNumLabel.Font = Enum.Font.Code
-	lineNumLabel.TextSize = 13
+	lineNumLabel.TextSize = 11
 	lineNumLabel.TextXAlignment = Enum.TextXAlignment.Center
 	lineNumLabel.TextYAlignment = Enum.TextYAlignment.Top
 	lineNumLabel.ClipsDescendants = true
 	lineNumLabel.Parent = lineNumBg
 
+	-- Área de código
 	local codeBox = Instance.new("TextBox")
-	codeBox.Size = UDim2.new(1,-36,1,-10)
-	codeBox.Position = UDim2.new(0,34,0,6)
+	codeBox.Size = UDim2.new(1,-30,1,-10) -- Ajustado para el nuevo ancho
+	codeBox.Position = UDim2.new(0,26,0,6)
 	codeBox.BackgroundTransparency = 1
-	codeBox.TextColor3 = Color3.fromRGB(200,220,255)
-	codeBox.PlaceholderText = "-- Escribe tu script aqui...\nprint(\"Happy Hub Executor\")"
-	codeBox.PlaceholderColor3 = Color3.fromRGB(70,80,100)
-	codeBox.TextSize = 13
+	codeBox.TextColor3 = Color3.fromRGB(190,210,245)
+	codeBox.PlaceholderText = "-- Escribe tu script aquí...\nprint(\"Happy Hub Executor\")"
+	codeBox.PlaceholderColor3 = Color3.fromRGB(55,65,85)
+	codeBox.TextSize = 12
 	codeBox.Font = Enum.Font.Code
 	codeBox.ClearTextOnFocus = false
 	codeBox.MultiLine = true
@@ -2420,14 +2834,15 @@ do
 		lineNumLabel.Text = table.concat(nums, "\n")
 	end)
 
+	-- Barra de estado (más compacta)
 	local statusBar = Instance.new("Frame")
-	statusBar.Size = UDim2.new(1,0,0,28)
-	statusBar.Position = UDim2.new(0,0,1,-74)
-	statusBar.BackgroundColor3 = Color3.fromRGB(8,8,12)
+	statusBar.Size = UDim2.new(1,0,0,22)
+	statusBar.Position = UDim2.new(0,0,1,-44)
+	statusBar.BackgroundColor3 = Color3.fromRGB(6,6,10)
 	statusBar.BackgroundTransparency = 0.1
 	statusBar.BorderSizePixel = 0
 	statusBar.Parent = executorPage
-	styleCorner(statusBar, UDim.new(0,8))
+	styleCorner(statusBar, UDim.new(0,6))
 	local statusStroke2 = Instance.new("UIStroke")
 	statusStroke2.Color = th.accent
 	statusStroke2.Thickness = 1
@@ -2436,84 +2851,58 @@ do
 	table.insert(reg.accentStrokes, statusStroke2)
 
 	local statusDot = Instance.new("Frame")
-	statusDot.Size = UDim2.new(0,8,0,8)
-	statusDot.Position = UDim2.new(0,10,0.5,-4)
-	statusDot.BackgroundColor3 = th.subtext
+	statusDot.Size = UDim2.new(0,6,0,6)
+	statusDot.Position = UDim2.new(0,10,0.5,-3)
+	statusDot.BackgroundColor3 = Color3.fromRGB(80,80,100)
 	statusDot.BorderSizePixel = 0
 	statusDot.Parent = statusBar
 	styleCorner(statusDot, UDim.new(1,0))
 
 	local statusLbl = Instance.new("TextLabel")
-	statusLbl.Size = UDim2.new(1,-28,1,0)
-	statusLbl.Position = UDim2.new(0,24,0,0)
+	statusLbl.Size = UDim2.new(1,-24,1,0)
+	statusLbl.Position = UDim2.new(0,22,0,0)
 	statusLbl.BackgroundTransparency = 1
-	statusLbl.Text = "Listo."
-	statusLbl.TextColor3 = th.subtext
+	statusLbl.Text = "Ready"
+	statusLbl.TextColor3 = Color3.fromRGB(100,110,130)
 	statusLbl.Font = Enum.Font.Code
-	statusLbl.TextSize = 12
+	statusLbl.TextSize = 11
 	statusLbl.TextXAlignment = Enum.TextXAlignment.Left
 	statusLbl.Parent = statusBar
 	table.insert(reg.subtexts, statusLbl)
 
+	-- Barra de acciones (íconos sin texto, alineados a la derecha)
 	local btnRow = Instance.new("Frame")
-	btnRow.Size = UDim2.new(1,0,0,40)
-	btnRow.Position = UDim2.new(0,0,1,-40)
+	btnRow.Size = UDim2.new(1,0,0,36)
+	btnRow.Position = UDim2.new(0,0,1,-36)
 	btnRow.BackgroundTransparency = 1
 	btnRow.BorderSizePixel = 0
 	btnRow.Parent = executorPage
 
-	local execBtn = Instance.new("TextButton")
-	execBtn.Size = UDim2.new(0.62,-4,1,0)
-	execBtn.Position = UDim2.new(0,0,0,0)
-	execBtn.BackgroundColor3 = th.accent
-	execBtn.Text = ""
-	execBtn.BorderSizePixel = 0
-	execBtn.AutoButtonColor = false
-	execBtn.Parent = btnRow
-	styleCorner(execBtn, UDim.new(0,10))
-	table.insert(reg.accentBgs, execBtn)
+	-- Layout para botones (alineados a la derecha)
+	local btnLayout = Instance.new("UIListLayout")
+	btnLayout.FillDirection = Enum.FillDirection.Horizontal
+	btnLayout.Padding = UDim.new(0,8)
+	btnLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	btnLayout.Parent = btnRow
 
-	local execBtnIcon = Instance.new("ImageLabel")
-	execBtnIcon.Size = UDim2.new(0,22,0,22)
-	execBtnIcon.Position = UDim2.new(0,10,0.5,-11)
-	execBtnIcon.BackgroundTransparency = 1
-	execBtnIcon.Image = EXEC_ICON_ID
-	execBtnIcon.ImageColor3 = th.bg
-	execBtnIcon.ScaleType = Enum.ScaleType.Fit
-	execBtnIcon.Parent = execBtn
-
-	local execBtnLbl = Instance.new("TextLabel")
-	execBtnLbl.Size = UDim2.new(1,-38,1,0)
-	execBtnLbl.Position = UDim2.new(0,36,0,0)
-	execBtnLbl.BackgroundTransparency = 1
-	execBtnLbl.Text = "Ejecutar"
-	execBtnLbl.TextColor3 = th.bg
-	execBtnLbl.TextSize = 15
-	execBtnLbl.Font = Enum.Font.GothamBold
-	execBtnLbl.TextXAlignment = Enum.TextXAlignment.Left
-	execBtnLbl.Parent = execBtn
-	-- ✅ FIX 4: usar bgTexts en lugar de panels para que el color cambie con el tema
-	table.insert(reg.bgTexts, execBtnLbl)
-
-	execBtn.MouseEnter:Connect(function() TweenService:Create(execBtn, twI, {BackgroundTransparency=0.18}):Play() end)
-	execBtn.MouseLeave:Connect(function() TweenService:Create(execBtn, twI, {BackgroundTransparency=0}):Play() end)
-
+	-- Botón Limpiar (solo ícono)
 	local clearBtn = Instance.new("TextButton")
-	clearBtn.Size = UDim2.new(0.38,-4,1,0)
-	clearBtn.Position = UDim2.new(0.62,4,0,0)
+	clearBtn.Size = UDim2.new(0,44,0,32)
 	clearBtn.BackgroundColor3 = th.bg
 	clearBtn.BackgroundTransparency = 0.15
 	clearBtn.Text = ""
 	clearBtn.BorderSizePixel = 0
 	clearBtn.AutoButtonColor = false
 	clearBtn.Parent = btnRow
-	styleCorner(clearBtn, UDim.new(0,10))
-	local clearStroke = styleStroke(clearBtn, 0.72, th.subtext)
+	styleCorner(clearBtn, UDim.new(0,6))
+	local clearStroke = styleStroke(clearBtn, 0.7, th.subtext)
 	table.insert(reg.panels, clearBtn)
 
 	local clearBtnIcon = Instance.new("ImageLabel")
-	clearBtnIcon.Size = UDim2.new(0,20,0,20)
-	clearBtnIcon.Position = UDim2.new(0,10,0.5,-10)
+	clearBtnIcon.Size = UDim2.new(0,16,0,16)
+	clearBtnIcon.Position = UDim2.new(0.5,-8,0.5,-8)
 	clearBtnIcon.BackgroundTransparency = 1
 	clearBtnIcon.Image = CLEAR_ICON_ID
 	clearBtnIcon.ImageColor3 = th.subtext
@@ -2521,40 +2910,86 @@ do
 	clearBtnIcon.Parent = clearBtn
 	table.insert(reg.subtexts, clearBtnIcon)
 
-	local clearBtnLbl = Instance.new("TextLabel")
-	clearBtnLbl.Size = UDim2.new(1,-36,1,0)
-	clearBtnLbl.Position = UDim2.new(0,34,0,0)
-	clearBtnLbl.BackgroundTransparency = 1
-	clearBtnLbl.Text = "Limpiar"
-	clearBtnLbl.TextColor3 = th.subtext
-	clearBtnLbl.TextSize = 14
-	clearBtnLbl.Font = Enum.Font.GothamSemibold
-	clearBtnLbl.TextXAlignment = Enum.TextXAlignment.Left
-	clearBtnLbl.Parent = clearBtn
-	table.insert(reg.subtexts, clearBtnLbl)
-
 	clearBtn.MouseEnter:Connect(function() TweenService:Create(clearBtn, twI, {BackgroundTransparency=0}):Play() end)
 	clearBtn.MouseLeave:Connect(function() TweenService:Create(clearBtn, twI, {BackgroundTransparency=0.15}):Play() end)
 
+	-- Botón Ejecutar (solo ícono, más prominente)
+	local execBtn = Instance.new("TextButton")
+	execBtn.Size = UDim2.new(0,44,0,32)
+	execBtn.BackgroundColor3 = th.accent
+	execBtn.Text = ""
+	execBtn.BorderSizePixel = 0
+	execBtn.AutoButtonColor = false
+	execBtn.Parent = btnRow
+	styleCorner(execBtn, UDim.new(0,6))
+	table.insert(reg.accentBgs, execBtn)
+
+	local execBtnIcon = Instance.new("ImageLabel")
+	execBtnIcon.Size = UDim2.new(0,18,0,18)
+	execBtnIcon.Position = UDim2.new(0.5,-9,0.5,-9)
+	execBtnIcon.BackgroundTransparency = 1
+	execBtnIcon.Image = EXEC_ICON_ID
+	execBtnIcon.ImageColor3 = th.bg
+	execBtnIcon.ScaleType = Enum.ScaleType.Fit
+	execBtnIcon.Parent = execBtn
+
+	execBtn.MouseEnter:Connect(function() TweenService:Create(execBtn, twI, {BackgroundTransparency=0.15}):Play() end)
+	execBtn.MouseLeave:Connect(function() TweenService:Create(execBtn, twI, {BackgroundTransparency=0}):Play() end)
+
+	-- Tooltips para los botones
+	local function createTooltip(btn, text)
+		local tip = Instance.new("TextLabel")
+		tip.Size = UDim2.new(0,0,0,18)
+		tip.AutomaticSize = Enum.AutomaticSize.X
+		tip.Position = UDim2.new(0.5,0,1,4)
+		tip.AnchorPoint = Vector2.new(0.5,0)
+		tip.BackgroundColor3 = Color3.fromRGB(0,0,0)
+		tip.BackgroundTransparency = 0.8
+		tip.Text = text
+		tip.TextColor3 = Color3.new(1,1,1)
+		tip.Font = Enum.Font.Gotham
+		tip.TextSize = 9
+		tip.TextXAlignment = Enum.TextXAlignment.Center
+		tip.BorderSizePixel = 0
+		tip.Visible = false
+		tip.Parent = btn
+		styleCorner(tip, UDim.new(1,0))
+		stylePadding(tip, 2,2,6,6)
+
+		btn.MouseEnter:Connect(function() tip.Visible = true end)
+		btn.MouseLeave:Connect(function() tip.Visible = false end)
+		return tip
+	end
+
+	createTooltip(execBtn, "Ejecutar (Ctrl+Enter)")
+	createTooltip(clearBtn, "Limpiar")
+
+	-- Funcionalidad de los botones
 	execBtn.MouseButton1Click:Connect(function()
 		local code = codeBox.Text
 		if code == "" then
 			statusDot.BackgroundColor3 = Color3.fromRGB(255,180,0)
-			statusLbl.Text = "No hay codigo para ejecutar."
+			statusLbl.Text = "⚠ Sin código"
+			task.delay(2, function()
+				if statusLbl and statusLbl.Parent then
+					statusDot.BackgroundColor3 = Color3.fromRGB(80,80,100)
+					statusLbl.Text = "Ready"
+				end
+			end)
 			return
 		end
 		local ok, err = pcall(function() loadstring(code)() end)
 		if ok then
-			statusDot.BackgroundColor3 = T().accent
-			statusLbl.Text = "Ejecutado correctamente."
+			statusDot.BackgroundColor3 = th.accent
+			statusLbl.Text = "✅ Ejecutado"
 		else
-			statusDot.BackgroundColor3 = T().danger
-			statusLbl.Text = "Error: "..(tostring(err):sub(1,60))
+			statusDot.BackgroundColor3 = th.danger
+			statusLbl.Text = "❌ "..(tostring(err):sub(1,40))
 		end
-		task.delay(4, function()
+		task.delay(3, function()
 			if statusDot and statusDot.Parent then
-				statusDot.BackgroundColor3 = T().subtext
-				statusLbl.Text = "Listo."
+				statusDot.BackgroundColor3 = Color3.fromRGB(80,80,100)
+				statusLbl.Text = "Ready"
 			end
 		end)
 	end)
@@ -2562,16 +2997,25 @@ do
 	clearBtn.MouseButton1Click:Connect(function()
 		codeBox.Text = ""
 		execTabData[activeExecTabIdx].content = ""
-		statusDot.BackgroundColor3 = T().subtext
-		statusLbl.Text = "Editor limpiado."
-		task.delay(2, function() if statusLbl and statusLbl.Parent then statusLbl.Text = "Listo." end end)
+		statusDot.BackgroundColor3 = Color3.fromRGB(80,80,100)
+		statusLbl.Text = "🧹 Limpiado"
+		task.delay(1.5, function() if statusLbl and statusLbl.Parent then statusLbl.Text = "Ready" end end)
+	end)
+
+	-- Atajo de teclado Ctrl+Enter para ejecutar
+	UserInputService.InputBegan:Connect(function(inp, processed)
+		if processed then return end
+		if inp.KeyCode == Enum.KeyCode.Return and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+			execBtn.MouseButton1Click:Fire()
+		end
 	end)
 end
+
 
 --============================================================
 -- PAGINA: GAME SCRIPTS
 --============================================================
-local gameScriptsPage = newPage("GameScripts")
+local gameScriptsPage = newPage("Scripts")
 do
 	local layout = Instance.new("UIListLayout")
 	layout.Padding = UDim.new(0,10)
@@ -2579,7 +3023,7 @@ do
 	layout.Parent = gameScriptsPage
 	stylePadding(gameScriptsPage, 0,8,0,4)
 
-	makeSectionLabel(gameScriptsPage, "SCRIPTS POR JUEGO", 0)
+	makeSectionLabel(gameScriptsPage, "More Scripts", 0)
 
 	local function makeScriptCard(parent, gameName, gameDesc, scriptFunc, badgeText, badgeColor, lo)
 		local th = T()
@@ -2609,7 +3053,7 @@ do
 		badge.Position = UDim2.new(0,14,0,10)
 		badge.BackgroundColor3 = badgeColor or th.accent
 		badge.BackgroundTransparency = 0.75
-		badge.Text = "  "..(badgeText or "SCRIPT").."  "
+		badge.Text = "  "..(badgeText or "Script").."  "
 		badge.TextColor3 = badgeColor or th.accent
 		badge.Font = Enum.Font.GothamBold
 		badge.TextSize = 9
@@ -2646,7 +3090,7 @@ do
 		runBtn.Size = UDim2.new(0,100,0,38)
 		runBtn.Position = UDim2.new(1,-108,0.5,-19)
 		runBtn.BackgroundColor3 = badgeColor or th.accent
-		runBtn.Text = "Ejecutar"
+		runBtn.Text = "Execute"
 		runBtn.TextColor3 = th.bg
 		runBtn.TextSize = 13
 		runBtn.Font = Enum.Font.GothamBold
@@ -2667,12 +3111,12 @@ do
 
 	makeScriptCard(
 		gameScriptsPage,
-		"Just a Baseplate",
-		"FE Lolita Glitcher — Leaked Version",
+		"Infinite yield",
+		"Universal Script 📌",
 		function()
-			loadstring(game:HttpGet("https://rawscripts.net/raw/UP-Just-a-baseplate.-Fe-Lolita-Glitcher-Leaked-Version-256619"))()
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
 		end,
-		"FE GLITCH",
+		"FE Best",
 		Color3.fromRGB(255, 105, 180),
 		1
 	)
@@ -2691,7 +3135,7 @@ do
 	local csLbl = Instance.new("TextLabel")
 	csLbl.Size = UDim2.new(1,0,1,0)
 	csLbl.BackgroundTransparency = 1
-	csLbl.Text = "+ Mas scripts proximamente..."
+	csLbl.Text = "+ More Scripts is coming"
 	csLbl.TextColor3 = th.subtext
 	csLbl.Font = Enum.Font.GothamSemibold
 	csLbl.TextSize = 12
@@ -2725,7 +3169,6 @@ local function showToast(msg)
 		task.delay(0.4, function() if toast and toast.Parent then toast:Destroy() end end)
 	end)
 end
-
 --============================================================
 -- PAGINA: SETTINGS
 --============================================================
@@ -2737,7 +3180,7 @@ do
 	layout.Parent = settingsPage
 	stylePadding(settingsPage, 0,12,0,4)
 
-	makeSectionLabel(settingsPage, "TEMA", 1)
+	makeSectionLabel(settingsPage, "Theme", 1)
 
 	local themeBox = Instance.new("Frame")
 	themeBox.LayoutOrder = 2
@@ -2859,7 +3302,7 @@ do
 			stroke.Thickness    = 2.5
 
 			currentThemeName = def.name
-			themeCurLbl.Text = "Tema actual:  "..def.name
+			themeCurLbl.Text = "Actual theme:  "..def.name
 			applyTheme()
 			switchTab(activeTabName)
 			-- ✅ MEJORA 7: notificación al cambiar tema
@@ -2876,7 +3319,7 @@ do
 		end
 	end)
 
-	makeSectionLabel(settingsPage, "VISUAL", 3)
+	makeSectionLabel(settingsPage, "Visual", 3)
 
 	local pillFullbright, setFullbright, getFullbright = makeToggleRow(settingsPage, "Fullbright", 4)
 	pillFullbright.MouseButton1Click:Connect(function()
@@ -2895,7 +3338,7 @@ do
 		end
 	end)
 
-	local pillHideGui, setHideGui, getHideGui = makeToggleRow(settingsPage, "Ocultar otros GUIs", 5)
+	local pillHideGui, setHideGui, getHideGui = makeToggleRow(settingsPage, "Hide GUIs", 5)
 	pillHideGui.MouseButton1Click:Connect(function()
 		local v = not getHideGui(); setHideGui(v)
 		for _, g in ipairs(player.PlayerGui:GetChildren()) do
@@ -2905,7 +3348,7 @@ do
 		end
 	end)
 
-	makeSectionLabel(settingsPage, "ICONO DEL BOTON", 6)
+	makeSectionLabel(settingsPage, "Set Custom decal", 6)
 
 	local iconBox = Instance.new("Frame")
 	iconBox.LayoutOrder = 7
@@ -2975,7 +3418,7 @@ do
 		end
 	end)
 
-	makeSectionLabel(settingsPage, "ZONA DE PELIGRO", 8)
+	makeSectionLabel(settingsPage, "Warn zone", 8)
 	local deleteGuiBtn = makeDangerBtn(settingsPage, "Eliminar Gui", 9)
 	deleteGuiBtn.MouseButton1Click:Connect(function()
 		-- ✅ FIX 2: usar HHBFuncs para acceder a funciones de otros bloques
@@ -3187,15 +3630,13 @@ end)
 --============================================================
 -- TOGGLE FLOTANTE Y TECLA RightShift
 --============================================================
-local toggleBtn = nil
 local function openGui()
-	panel.Visible = true
-	TweenService:Create(panel, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = PANEL_TRANSPARENCY}):Play()
+    panel.Visible = true
+    panel.BackgroundTransparency = PANEL_TRANSPARENCY
 end
+
 local function closeGui()
-	TweenService:Create(panel, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0.5}):Play()
-	task.wait(0.28)
-	panel.Visible = false
+    panel.Visible = false
 end
 
 local toggle = Instance.new("ImageButton")
@@ -3203,7 +3644,7 @@ toggle.Name = "HHBToggle"
 toggle.Size = UDim2.new(0,62,0,62)
 toggle.Position = UDim2.new(1,-80,1,-90)
 toggle.BackgroundColor3 = T().bg
-toggle.BackgroundTransparency = 0.12
+toggle.BackgroundTransparency = 0.5
 toggle.AutoButtonColor = true
 toggle.Image = ICON_ID
 toggle.ImageColor3 = T().accent
@@ -3254,4 +3695,4 @@ end)
 -- Inicializar
 switchTab("Home")
 applyTheme()
-print("Happy Hub v9 FIXED cargado | Todos los bugs corregidos | OverRBX")
+print("Happy Hub Licenced by Github > By Odecode.")
